@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+
+export PATH=$(dirname $0):$PATH
+
+cmd=$1
+shift
+lrc-$cmd $@
+
