@@ -1,47 +1,30 @@
 #!/usr/bin/env bash
 
+DEV=$1
+PART=${DEV}1
+TMNT=
+MNT=
+
 die () {
 	echo "error: $@, exiting"
 	exit 1
 }
 
-DEV=$1
+second_guess () {
+	local DEVICE_INFO=$(fdisk -l $DEV | head -n 1)
+	if [ "$DEVICE_INFO" = "" ] ; then
+		die "failed to get disk info on $DEV"
+	fi
 
-DEVICE_INFO=$(fdisk -l $DEV | head -n 1)
-if [ "$DEVICE_INFO" = "" ] ; then
-	die "failed to get disk info on $DEV"
-fi
-
-echo -n "Use $DEVICE_INFO? (y/n) [n]: "
-read yesno
-if [ "$yesno" != "y" ] ; then
-	exit
-fi
-
-FSTYPE=ext4
-PART=${DEV}1
-TMNT=
-MNT=
-
-umount_all () {
-	sleep 2
-	for p in $DEV* ; do
-		if [ "$p" != "$DEV" ] ; then
-			umount $p
-		fi
-	done
+	echo -n "Use $DEVICE_INFO? (y/n) [n]: "
+	read yesno
+	if [ "$yesno" != "y" ] ; then
+		exit
+	fi
 }
 
-# prepare_device () {
-# 	umount_all
-# 	(echo o; echo n; echo p; echo 1; echo; echo; echo a; echo w) | fdisk $DEV
-# 	partprobe
-# 	mkfs.$FSTYPE -F -F $PART
-# 	umount_all
-# }
-
 mount_device () {
-	MNT=$(cat /proc/mounts | grep /dev/sde1 | cut -d\  -f2)
+	MNT=$(cat /proc/mounts | grep $PART | cut -d\  -f2)
 	if (( $? == 0 )) ; then
 		TMNT=$(mktemp -d)
 		MNT=$TMNT
@@ -51,24 +34,32 @@ mount_device () {
 }
 
 clone_fs () {
-	rsync -av /bin /boot /etc /lib /lib64 /opt /root /sbin /srv /usr /var $MNT/. || die "rsync failed"
-	mkdir -p $MNT/{dev,home,proc,run,sys,tmp}
+	rsync -av /home /bin /boot /etc /lib /lib64 /opt /root /sbin /srv /usr /var $MNT/. || die "rsync failed"
+	mkdir -p $MNT/{dev,proc,run,sys,tmp}
 }
 
-do_grub () {
+rewrite_grub () {
 	for d in dev proc run sys ; do
 		mount --bind /$d $MNT/$d || die "failed to mount --bind /$d $MNT/$d"
 	done
 
-
-	sed -i 's/GRUB_TIMEOUT=.*$/GRUB_TIMEOUT=30/g' /etc/default/grub
-	echo GRUB_DISABLE_OS_PROBER=true >> /etc/default/grub
+cat << EOF > $MNT/etc/default/grub
+GRUB_DEFAULT=0
+GRUB_TIMEOUT=20
+#GRUB_DISTRIBUTOR=`lsb_release -i -s 2> /dev/null || echo "Reuben Reboot Lunux Backup"`
+GRUB_DISTRIBUTOR="Reuben Reboot Lunux Backup"
+#GRUB_CMDLINE_LINUX_DEFAULT="quiet splash"
+GRUB_CMDLINE_LINUX=""
+EOF
 
 cat << EOF > $MNT/tmp/grub.sh
 #!/usr/bin/env bash
+sed -i 's/GRUB_TIMEOUT=.*$/GRUB_TIMEOUT=30/g' /etc/default/grub
+echo GRUB_DISABLE_OS_PROBER=true >> /etc/default/grub
 grub-install $DEV
 update-grub
 EOF
+
 	chmod +x $MNT/tmp/grub.sh
 	(
 		chroot $MNT /tmp/grub.sh
@@ -80,7 +71,7 @@ EOF
 	done
 }
 
-do_fstab () {
+rewrite_fstab () {
 	local UUID=$(blkid $PART | cut -d\" -f2)
 
 cat << EOF > $MNT/etc/fstab
@@ -104,10 +95,11 @@ cleanup () {
 
 main () {
 	#prepare_device
+	second_guess
 	mount_device
 	clone_fs
-	do_grub
-	do_fstab
+	rewrite_fstab
+	rewrite_grub
 	cleanup
 }
 
