@@ -36,8 +36,21 @@ mount_device () {
 
 clone_fs () {
 	echo "cloning / to $MNT..."
-	rsync -av /bin /boot /etc /lib /lib64 /opt /root /sbin /srv /usr /var /home $MNT/. || die "rsync failed"
-	mkdir -p $MNT/{dev,proc,run,sys,tmp}
+	rsync -aEHSv --delete \
+		/bin \
+		/boot \
+		/etc \
+		/home \
+		/lib \
+		/lib64 \
+		/opt \
+		/root \
+		/sbin \
+		/srv \
+		/usr \
+		/var \
+		$MNT/. || die "rsync failed"
+	mkdir -p $MNT/{dev,media,proc,run,sys,tmp}
 }
 
 rewrite_grub () {
