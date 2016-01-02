@@ -31,14 +31,18 @@ mount_device () {
 		mkdir -p $MNT || die "unable to mkdir $MNT"
 		mount $PART $MNT || die "unable to mount $PART on $MNT"
 	fi
+	echo "$PART mounted on $MNT"
 }
 
 clone_fs () {
-	rsync -av /home /bin /boot /etc /lib /lib64 /opt /root /sbin /srv /usr /var $MNT/. || die "rsync failed"
+	echo "cloning / to $MNT..."
+	rsync -av /bin /boot /etc /lib /lib64 /opt /root /sbin /srv /usr /var /home $MNT/. || die "rsync failed"
 	mkdir -p $MNT/{dev,proc,run,sys,tmp}
 }
 
 rewrite_grub () {
+	echo "installing GRUB2 on $PART..."
+
 	for d in dev proc run sys ; do
 		mount --bind /$d $MNT/$d || die "failed to mount --bind /$d $MNT/$d"
 	done
@@ -72,6 +76,7 @@ EOF
 }
 
 rewrite_fstab () {
+	echo "writing new /etc/fstab..."
 	local UUID=$(blkid $PART | cut -d\" -f2)
 
 cat << EOF > $MNT/etc/fstab
@@ -82,7 +87,8 @@ cat << EOF > $MNT/etc/fstab
 # that works even if disks are added and removed. See fstab(5).
 #
 # <file system> <mount point>   <type>  <options>       <dump>  <pass>
-UUID=$UUID / auto    errors=remount-ro 0       1
+UUID=$UUID / auto errors=remount-ro 0 1
+none /tmp tmpfs defaults 0 0
 EOF
 
 }
