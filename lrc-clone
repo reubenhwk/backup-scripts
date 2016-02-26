@@ -1,9 +1,18 @@
 #!/usr/bin/env bash
 
+if test -z "$1" ; then
+    echo "usage: $0 backup-destination-dev" >&2
+    exit 1
+fi
+
+set -u
+
 DEV=$1
 PART=${DEV}1
 TMNT=
 MNT=
+
+PATH=/usr/sbin:/sbin:$PATH
 
 die () {
 	echo "error: $@, exiting"
