@@ -63,7 +63,7 @@ clone_fs () {
 }
 
 rewrite_grub () {
-	echo "installing GRUB2 on $PART..."
+	echo "installing GRUB2 on $DEV..."
 
 	for d in dev proc run sys ; do
 		mount --bind /$d $MNT/$d || die "failed to mount --bind /$d $MNT/$d"
