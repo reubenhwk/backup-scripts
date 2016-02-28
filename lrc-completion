@@ -1,0 +1,32 @@
+#!/usr/bin/env bash
+
+_lrc_complete()
+{
+	# COMP_WORDS is an array of words in the current command line.
+	# COMP_CWORD is the index of the current word (the one the cursor is
+	# in). So COMP_WORDS[COMP_CWORD] is the current word; we also record
+	# the previous word here, although this specific script doesn't
+	# use it yet.
+	local cur_word="${COMP_WORDS[COMP_CWORD]}"
+	local prev_word="${COMP_WORDS[COMP_CWORD-1]}"
+
+	# Only perform completion if the current word starts with a dash ('-'),
+	# meaning that the user is trying to complete an option.
+	case ${cur_word} in
+
+		# COMPREPLY is the array of possible completions, generated with
+		# the compgen builtin.
+		c*)
+			COMPREPLY=( $(compgen -W "clone" -- ${cur_word}) )
+			;;
+		*)
+			COMPREPLY=( $(compgen -W "clone prep" -- ${cur_word}) )
+			;;
+	esac
+
+	return 0
+}
+
+# Register _lrc_complete to provide completion for the following commands
+complete -F _lrc_complete lrc ./lrc
+
