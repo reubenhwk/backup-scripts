@@ -28,7 +28,6 @@
 #include <unistd.h>
  
 #define DUMPTXT          2
-#define DUMPCSV          3
 #define NONEWLINE        0
  
 #define DI_VERSION       "1.0"
@@ -227,7 +226,6 @@ void
 dump_partitions(char *device, int dumpmode, int nlmode)
 {
     PedDevice *dev = (PedDevice *)NULL;
-    PedDiskType* type;
     PedDisk* disk = (PedDisk *)NULL;
     PedPartition* part;
     PedPartitionFlag flag;
@@ -266,10 +264,6 @@ dump_partitions(char *device, int dumpmode, int nlmode)
           printf("    Partition Type: %s\n", disk->type->name);
           printf("    No.  Start   End     Size      Type      Filesystem   Name  Flags\n");
           break;
-       case DUMPCSV:
-          putchar('"'); putchar(','); putchar('"');
-          printf("%s", disk->type->name );
-          break;
     }
  
     free(start);
@@ -288,10 +282,14 @@ dump_partitions(char *device, int dumpmode, int nlmode)
  
          if (!(part->type & PED_PARTITION_FREESPACE)) {
               parttype = ped_partition_type_get_name (part->type);
-              partlabel = ped_partition_get_name(part);
          } else {
               parttype = "";
+         }
+ 
+         if (0 == strcmp(disk->type->name, "msdos")) {
               partlabel = "";
+         } else {
+              partlabel = ped_partition_get_name(part);
          }
  
          // flags 
@@ -319,24 +317,6 @@ dump_partitions(char *device, int dumpmode, int nlmode)
                  printf("  %6s", part->fs_type ? part->fs_type->name : "");
                  printf("  %10s  %s\n", partlabel, flags);
                  break;
-             case DUMPCSV:
-                 putchar('"'); putchar(','); putchar('"');
-                 if (part->num >= 0) printf("%02d", part->num);
-                 putchar('"'); putchar(','); putchar('"');
-                 printf("%s", start);
-                 putchar('"'); putchar(','); putchar('"');
-                 printf("%s", end);
-                 putchar('"'); putchar(','); putchar('"');
-                 printf("%s", size);
-                 putchar('"'); putchar(','); putchar('"');
-                 printf("%s", parttype);
-                 putchar('"'); putchar(','); putchar('"');
-                 if (part->fs_type) printf("%s", part->fs_type->name);
-                 putchar('"'); putchar(','); putchar('"');
-                 printf("%s", partlabel);
-                 putchar('"'); putchar(','); putchar('"');
-                 printf("%s", flags);
-                 break;
         }
  
         free(start);
@@ -346,9 +326,6 @@ dump_partitions(char *device, int dumpmode, int nlmode)
  
     switch (dumpmode) {
        case DUMPTXT:
-            break;
-       case DUMPCSV:
-            putchar('"');
             break;
     }
 }
@@ -375,35 +352,9 @@ dump(char *device)
 }
  
 void
-dumpcsv(char *device)
-{
-    putchar('"');
-    printf("%s", ascii_string(&id[27],20));
-    putchar('"'); putchar(','); putchar('"');
-    printf("%s", ascii_string(&id[10],10));
-    putchar('"'); putchar(','); putchar('"');
-    printf("%s", ascii_string(&id[23],4));
-    putchar('"'); putchar(','); putchar('"');
-    printf("%s", get_transport(id));
-    putchar('"'); putchar(','); putchar('"');
-    printf("%s", get_rpm(id));
-    putchar('"'); putchar(','); putchar('"');
-    printf("%s", get_capacity(fd, id));
-    putchar('"'); putchar(','); putchar('"');
-    printf("%u", g->cylinders);
-    putchar('"'); putchar(','); putchar('"');
-    printf("%u", g->heads);
-    putchar('"'); putchar(','); putchar('"');
-    printf("%u", g->sectors);
-    putchar('"');
-    dump_partitions(device, DUMPCSV, NONEWLINE);
-}
- 
- 
-void
 usage()
 {
-    printf("usage: di [-n] [-c|-csv] devicepath\n");
+    printf("usage: di [-n] devicepath\n");
     printf("usage: di [-v |--version ]\n");
 }
  
@@ -414,25 +365,21 @@ main(int argc,
 {
     static struct hd_driveid hd;
     int option_index = 0, c;
-    int nlmode = 0, csvmode = 0;
+    int nlmode = 0;
     char *device;
  
     static struct option long_options[] = {
-        {"csv", no_argument, 0, 'c'},
         {"help", no_argument, 0, 'h'},
         {"newline", no_argument, 0, 'n'},
         {"version", no_argument, 0, 'v'},
         {0, 0, 0, 0}
     };
  
-    while ((c = getopt_long(argc, argv, "chnv", long_options, &option_index)) != -1) {
+    while ((c = getopt_long(argc, argv, "hnv", long_options, &option_index)) != -1) {
         switch (c) {
             case 'h':
                 usage();
                 exit(EXIT_SUCCESS);
-            case 'c':
-                csvmode = 1;
-                break;
             case 'n':
                 nlmode = 1;
                 break;
@@ -443,11 +390,6 @@ main(int argc,
                 usage();
                 exit(EXIT_FAILURE);
         }
-    }
- 
-    if (csvmode) {
-        fprintf(stderr, "ERROR: Select either CVS for formatted output\n");
-        exit(EXIT_FAILURE);
     }
  
     if (optind >= argc) {
@@ -480,10 +422,7 @@ main(int argc,
  
     close(fd);
  
-    if (csvmode)
-        dumpcsv(device);
-    else
-        dump(device);
+    dump(device);
  
     exit(EXIT_SUCCESS);
 }
