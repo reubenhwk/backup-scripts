@@ -14,19 +14,19 @@
  */
  
  
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
+#include <asm/byteorder.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <getopt.h>
 #include <linux/fs.h>
-#include <asm/byteorder.h>
-#include <sys/ioctl.h>
 #include <linux/hdreg.h>
 #include <parted/parted.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sys/ioctl.h>
+#include <unistd.h>
  
-#define DUMPXML          1
 #define DUMPTXT          2
 #define DUMPCSV          3
 #define NONEWLINE        0
@@ -262,12 +262,6 @@ dump_partitions(char *device, int dumpmode, int nlmode)
           - (default_unit == PED_UNIT_CHS || default_unit == PED_UNIT_CYLINDER));
  
     switch (dumpmode) {
-       case DUMPXML:
-          if (nlmode) printf("\n    ");
-          printf("<partitiontype>%s<paritiontype>", disk->type->name);
-          if (nlmode) printf("\n    ");
-          printf("<partitions>");
-          break;
        case DUMPTXT:
           printf("    Partition Type: %s\n", disk->type->name);
           printf("    No.  Start   End     Size      Type      Filesystem   Name  Flags\n");
@@ -316,29 +310,6 @@ dump_partitions(char *device, int dumpmode, int nlmode)
               }
          }
          switch (dumpmode) {
-             case DUMPXML:
-                 if (nlmode) printf("\n        ");
-                 if (part->num >= 0)
-                      printf("<partition number=\"%d\">", part->num);
-                 else
-                      printf("<partition number=\"0\">");
-                 if (nlmode) printf("\n            ");
-                 printf("<start>%s</start>", start);
-                 if (nlmode) printf("\n            ");
-                 printf("<end>%s</end>", end);
-                 if (nlmode) printf("\n            ");
-                 printf("<size>%s</size>", size);
-                 if (nlmode) printf("\n            ");
-                 printf("<type>%s</type>", parttype);
-                 if (nlmode) printf("\n            ");
-                 printf("<filesystem>%s</filesystem>", part->fs_type ? part->fs_type->name : "");
-                 if (nlmode) printf("\n            ");
-                 printf("<label>%s</label>", partlabel);
-                 if (nlmode) printf("\n            ");
-                 printf("<flags>%s</flags>", flags);
-                 if (nlmode) printf("\n        ");
-                 printf("</partition>");
-                 break;
              case DUMPTXT:
                  if (part->num >= 0)
                       printf("    %02d", part->num);
@@ -374,10 +345,6 @@ dump_partitions(char *device, int dumpmode, int nlmode)
     }
  
     switch (dumpmode) {
-       case DUMPXML:
-            if (nlmode) printf("\n    ");
-            printf("</partitions>");
-            break;
        case DUMPTXT:
             break;
        case DUMPCSV:
@@ -406,40 +373,6 @@ dump(char *device)
  
     dump_partitions(device, DUMPTXT, NONEWLINE);
 }
- 
- 
-void
-dumpxml(char *device, int nlmode)
-{
-    printf("<disk dev=\"%s\">", device);
-    if (nlmode) printf("\n    ");
-    printf("<model>%s</model>", ascii_string(&id[27],20));
-    if (nlmode) printf("\n    ");
-    printf("<serialno>%s</serialno>", ascii_string(&id[10],10));
-    if (nlmode) printf("\n    ");
-    printf("<firmware>%s</firmware>", ascii_string(&id[23],4));
-    if (nlmode) printf("\n    ");
-    printf("<transport>%s</transport>", get_transport(id));
-    if (nlmode) printf("\n    ");
-    printf("<rpm>%s</rpm>", get_rpm(id));
-    if (nlmode) printf("\n    ");
-    printf("<capacity>%s</capacity>", get_capacity(fd, id));
-    if (nlmode) printf("\n    ");
-    printf("<geometry>");
-    if (nlmode) printf("\n        ");
-    printf("<cylinders>%u</cylinders>", (unsigned short) g->cylinders);
-    if (nlmode) printf("\n        ");
-    printf("<heads>%u</heads>", (unsigned char) g->heads);
-    if (nlmode) printf("\n        ");
-    printf("<sectors>%u</sectors>", (unsigned char) g->sectors);
-    if (nlmode) printf("\n    ");
-    printf("</geometry>");
-    dump_partitions(device, DUMPXML, nlmode);
-    if (nlmode) putchar('\n');
-    printf("</disk>");
-    if (nlmode) putchar('\n');
-}
- 
  
 void
 dumpcsv(char *device)
@@ -470,7 +403,7 @@ dumpcsv(char *device)
 void
 usage()
 {
-    printf("usage: di [-n] [-c|-csv|-x|--xml] devicepath\n");
+    printf("usage: di [-n] [-c|-csv] devicepath\n");
     printf("usage: di [-v |--version ]\n");
 }
  
@@ -481,7 +414,7 @@ main(int argc,
 {
     static struct hd_driveid hd;
     int option_index = 0, c;
-    int xmlmode = 0, nlmode = 0, csvmode = 0;
+    int nlmode = 0, csvmode = 0;
     char *device;
  
     static struct option long_options[] = {
@@ -489,11 +422,10 @@ main(int argc,
         {"help", no_argument, 0, 'h'},
         {"newline", no_argument, 0, 'n'},
         {"version", no_argument, 0, 'v'},
-        {"xml", no_argument, 0, 'x'},
         {0, 0, 0, 0}
     };
  
-    while ((c = getopt_long(argc, argv, "chnvx", long_options, &option_index)) != -1) {
+    while ((c = getopt_long(argc, argv, "chnv", long_options, &option_index)) != -1) {
         switch (c) {
             case 'h':
                 usage();
@@ -504,9 +436,6 @@ main(int argc,
             case 'n':
                 nlmode = 1;
                 break;
-            case 'x':
-                xmlmode = 1;
-                break;
             case 'v':
                 fprintf(stdout, "version %s\n", DI_VERSION);
                 exit(EXIT_SUCCESS);
@@ -516,8 +445,8 @@ main(int argc,
         }
     }
  
-    if (csvmode && xmlmode) {
-        fprintf(stderr, "ERROR: Select either XML or CVS for formatted output\n");
+    if (csvmode) {
+        fprintf(stderr, "ERROR: Select either CVS for formatted output\n");
         exit(EXIT_FAILURE);
     }
  
@@ -553,8 +482,6 @@ main(int argc,
  
     if (csvmode)
         dumpcsv(device);
-    else if (xmlmode)
-        dumpxml(device, nlmode);
     else
         dump(device);
  
