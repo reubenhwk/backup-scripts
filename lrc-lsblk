@@ -9,6 +9,7 @@ for d in $devs ; do
 	model=$(cat /sys/class/block/$d/device/model)
 	removable=$(cat /sys/class/block/$d/removable)
 	size=$(cat /sys/class/block/$d/size)
+	size=$(( $size * 512 ))
 	echo $d,$size,$removable,$vendor,$model
 done
 
