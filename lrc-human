@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+
+if false ; then
+	false
+elif (( $1 > 1000*1000*1000*1000*1000*1000 )) ; then
+	echo $(echo "scale=2 ; $1 / (1000*1000*1000*1000*1000*1000)" | bc)E
+elif (( $1 > 1000*1000*1000*1000*1000 )) ; then
+	echo $(echo "scale=2 ; $1 / (1000*1000*1000*1000*1000)" | bc)P
+elif (( $1 > 1000*1000*1000*1000 )) ; then
+	echo $(echo "scale=2 ; $1 / (1000*1000*1000*1000)" | bc)T
+elif (( $1 > 1000*1000*1000 )) ; then
+	echo $(echo "scale=2 ; $1 / (1000*1000*1000)" | bc)G
+elif (( $1 > 1000*1000 )) ; then
+	echo $(echo "scale=2 ; $1 / (1000*1000)" | bc)M
+elif (( $1 > 1000 )) ; then
+	echo $(echo "scale=2 ; $1 / (1000)" | bc)K
+else
+	echo $1
+fi
