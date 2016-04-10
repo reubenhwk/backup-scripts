@@ -12,6 +12,8 @@ PART=${DEV}1
 TMNT=
 MNT=
 
+mkdir -p /tmp/backup
+
 PATH=/usr/sbin:/sbin:$PATH
 
 die () {
@@ -19,13 +21,13 @@ die () {
 	exit 1
 }
 
-second_guess () {
-	local DEVICE_INFO=$(fdisk -l $DEV | head -n 1)
-	if [ "$DEVICE_INFO" = "" ] ; then
-		die "failed to get disk info on $DEV"
-	fi
+run-cmd () {
+	echo "$1"
+	eval "$1"
+}
 
-	echo -n "Use $DEVICE_INFO? (y/n) [n]: "
+second_guess () {
+	echo -n "Use $DEV? (y/n) [n]: "
 	read yesno
 	if [ "$yesno" != "y" ] ; then
 		exit
@@ -35,7 +37,7 @@ second_guess () {
 mount_device () {
 	MNT=$(cat /proc/mounts | grep $PART | cut -d\  -f2)
 	if (( $? == 0 )) ; then
-		TMNT=$(mktemp -d)
+		TMNT=$(mktemp -d /tmp/backup/dst.XXXXX)
 		MNT=$TMNT
 		mkdir -p $MNT || die "unable to mkdir $MNT"
 		mount $PART $MNT || die "unable to mount $PART on $MNT"
@@ -43,29 +45,42 @@ mount_device () {
 	echo "$PART mounted on $MNT"
 }
 
+trim-comments () {
+	sed 's/#.*$//g' | sed 's/[ \t]*$//g' | grep -v "^$"
+}
+
 clone_fs () {
-	echo "cloning / to $MNT..."
-	rsync -aEHSv --delete \
-		/bin \
-		/boot \
-		/etc \
-		/home \
-		/lib \
-		/lib64 \
-		/opt \
-		/root \
-		/sbin \
-		/srv \
-		/usr \
-		/var \
+	local root=$(mktemp -d /tmp/backup/src.XXXXX)
+
+	# remount everything in fstab on a temporary mount point
+	while read dev mnt fs rest ; do
+		if [ "$mnt" != "none" ] ; then
+			run-cmd "mount $dev $root${mnt}"
+		fi
+	done < <(cat /etc/fstab | trim-comments | awk '{printf "%s %s %s\n", $1, $2, $3}')
+
+	# rsync the temporary mount point root to the target device
+	echo "cloning $root to $MNT..."
+	rsync -aEHSv --delete --exclude tmp \
+		$root/* \
 		$MNT/. || die "rsync failed"
-	mkdir -p $MNT/{dev,media,proc,run,sys,tmp}
+	mkdir -p $MNT/tmp
+
+	# umount everything in the temporary mount point (in reverse order with tac)
+	while read dev mnt fs rest ; do
+		if [ "$mnt" != "none" ] ; then
+			run-cmd "umount $root${mnt}"
+		fi
+	done < <(tac /etc/fstab | trim-comments | awk '{printf "%s %s %s\n", $1, $2, $3}')
+
+	rmdir $root
 }
 
 rewrite_grub () {
 	echo "installing GRUB2 on $DEV..."
 
 	for d in dev proc run sys ; do
+		mkdir -p $MNT/$d
 		mount --bind /$d $MNT/$d || die "failed to mount --bind /$d $MNT/$d"
 	done
 
@@ -122,7 +137,6 @@ cleanup () {
 }
 
 main () {
-	#prepare_device
 	second_guess
 	mount_device
 	clone_fs
