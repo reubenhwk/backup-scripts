@@ -12,8 +12,6 @@ PART=${DEV}1
 TMNT=
 MNT=
 
-mkdir -p /tmp/backup
-
 PATH=/usr/sbin:/sbin:$PATH
 
 die () {
@@ -26,7 +24,7 @@ run-cmd () {
 	eval "$1"
 }
 
-second_guess () {
+second-guess () {
 	echo -n "Use $DEV? (y/n) [n]: "
 	read yesno
 	if [ "$yesno" != "y" ] ; then
@@ -34,7 +32,7 @@ second_guess () {
 	fi
 }
 
-mount_device () {
+mount-device () {
 	MNT=$(cat /proc/mounts | grep $PART | cut -d\  -f2)
 	if (( $? == 0 )) ; then
 		TMNT=$(mktemp -d /tmp/backup/dst.XXXXX)
@@ -49,34 +47,34 @@ trim-comments () {
 	sed 's/#.*$//g' | sed 's/[ \t]*$//g' | grep -v "^$"
 }
 
-clone_fs () {
-	local root=$(mktemp -d /tmp/backup/src.XXXXX)
+clone-fs () {
+	local SRC=$(mktemp -d /tmp/backup/src.XXXXX)
 
 	# remount everything in fstab on a temporary mount point
 	while read dev mnt fs rest ; do
 		if [ "$mnt" != "none" ] ; then
-			run-cmd "mount $dev $root${mnt}"
+			run-cmd "mount $dev $SRC${mnt}"
 		fi
 	done < <(cat /etc/fstab | trim-comments | awk '{printf "%s %s %s\n", $1, $2, $3}')
 
-	# rsync the temporary mount point root to the target device
-	echo "cloning $root to $MNT..."
+	# rsync the temporary mount point SRC to the target device
+	echo "cloning $SRC to $MNT..."
 	rsync -aEHSv --delete --exclude tmp \
-		$root/* \
+		$SRC/* \
 		$MNT/. || die "rsync failed"
 	mkdir -p $MNT/tmp
 
 	# umount everything in the temporary mount point (in reverse order with tac)
 	while read dev mnt fs rest ; do
 		if [ "$mnt" != "none" ] ; then
-			run-cmd "umount $root${mnt}"
+			run-cmd "umount $SRC${mnt}"
 		fi
 	done < <(tac /etc/fstab | trim-comments | awk '{printf "%s %s %s\n", $1, $2, $3}')
 
-	rmdir $root
+	rmdir $SRC
 }
 
-rewrite_grub () {
+rewrite-grub () {
 	echo "installing GRUB2 on $DEV..."
 
 	for d in dev proc run sys ; do
@@ -112,8 +110,8 @@ EOF
 	done
 }
 
-rewrite_fstab () {
-	echo "writing new /etc/fstab..."
+rewrite-fstab () {
+	echo "writing new $MNT/etc/fstab..."
 	local UUID=$(blkid $PART | cut -d\" -f2)
 
 cat << EOF > $MNT/etc/fstab
@@ -137,11 +135,12 @@ cleanup () {
 }
 
 main () {
-	second_guess
-	mount_device
-	clone_fs
-	rewrite_fstab
-	rewrite_grub
+	mkdir -p /tmp/backup
+	second-guess
+	mount-device
+	clone-fs
+	rewrite-fstab
+	rewrite-grub
 	cleanup
 }
 
