@@ -47,6 +47,10 @@ trim-comments () {
 	sed 's/#.*$//g' | sed 's/[ \t]*$//g' | grep -v "^$"
 }
 
+trim-fstab () {
+	cat /etc/fstab | trim-comments | awk '{printf "%s %s %s\n", $1, $2, $3}'
+}
+
 clone-fs () {
 	local SRC=$(mktemp -d /tmp/backup/src.XXXXX)
 
@@ -55,7 +59,7 @@ clone-fs () {
 		if [ "$mnt" != "none" ] ; then
 			run-cmd "mount $dev $SRC${mnt}"
 		fi
-	done < <(cat /etc/fstab | trim-comments | awk '{printf "%s %s %s\n", $1, $2, $3}')
+	done < <(LC_ALL=C trim-fstab | sort -k2) # LC_ALL is so sort doesn't ignore '/' characters
 
 	# rsync the temporary mount point SRC to the target device
 	echo "cloning $SRC to $MNT..."
@@ -64,12 +68,12 @@ clone-fs () {
 		$MNT/. || die "rsync failed"
 	mkdir -p $MNT/tmp
 
-	# umount everything in the temporary mount point (in reverse order with tac)
+	# umount everything in the temporary mount point (in reverse order with sort -r)
 	while read dev mnt fs rest ; do
 		if [ "$mnt" != "none" ] ; then
 			run-cmd "umount $SRC${mnt}"
 		fi
-	done < <(tac /etc/fstab | trim-comments | awk '{printf "%s %s %s\n", $1, $2, $3}')
+	done < <(LC_ALL=C trim-fstab | sort -r -k2) # LC_ALL is so sort doesn't ignore '/' characters
 
 	rmdir $SRC
 }
