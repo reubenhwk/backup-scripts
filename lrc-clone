@@ -7,8 +7,8 @@ fi
 
 set -u
 
-DEV=$1
-PART=${DEV}1
+BOOTDEV=$(cat $1 | sed 's/[ \t]\+$//g' | grep 'boot-loader$' | sed 's/[ \t]\+/ /g' | cut -d\  -f1)
+PART=${BOOTDEV}1
 TMNT=
 MNT=
 
@@ -25,7 +25,7 @@ run-cmd () {
 }
 
 second-guess () {
-	echo -n "Use $DEV? (y/n) [n]: "
+	echo -n "Use $BOOTDEV? (y/n) [n]: "
 	read yesno
 	if [ "$yesno" != "y" ] ; then
 		exit
@@ -79,7 +79,7 @@ clone-fs () {
 }
 
 rewrite-grub () {
-	echo "installing GRUB2 on $DEV..."
+	echo "installing GRUB2 on $BOOTDEV"
 
 	for d in dev proc run sys ; do
 		mkdir -p $MNT/$d
@@ -99,7 +99,7 @@ cat << EOF > $MNT/tmp/grub.sh
 #!/usr/bin/env bash
 sed -i 's/GRUB_TIMEOUT=.*$/GRUB_TIMEOUT=30/g' /etc/default/grub
 echo GRUB_DISABLE_OS_PROBER=true >> /etc/default/grub
-grub-install $DEV
+grub-install $BOOTDEV
 update-grub
 EOF
 
