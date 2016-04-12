@@ -155,7 +155,7 @@ main () {
 	second-guess
 	clone-fs
 	rewrite-fstab
-	#rewrite-grub
+	rewrite-grub
 
 	while read dev mnt rest ; do
 		if [ "$mnt" != "boot-loader" ] ; then
