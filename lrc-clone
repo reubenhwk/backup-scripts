@@ -138,7 +138,7 @@ EOF
 			fi
 
 cat << EOF >> $DST/etc/fstab
-UUID=$UUID $mnt auto errors=remount-ro 0 $pass
+UUID=$UUID $mnt auto defaults 0 $pass
 EOF
 		fi
 	done < <(LC_ALL=C trimfile $SPEC | sort -r -k2)
