@@ -40,17 +40,17 @@ trimfile () {
 	cat $1 | trim-comments | awk '{printf "%s %s %s\n", $1, $2, $3}'
 }
 
-clone-fs () {
-
-	DST=$(mktemp -d /tmp/backup/dst.XXXXX)
+mount-target-fs () {
 	while read dev mnt rest ; do
 		if [ "$mnt" != "boot-loader" ] ; then
 			mkdir -p $DST${mnt}
 			run-cmd "mount $dev $DST${mnt}"
 		fi
 	done < <(LC_ALL=C trimfile $SPEC | sort -k2)
+}
 
-	local SRC=$(mktemp -d /tmp/backup/src.XXXXX)
+clone-fs () {
+
 	# remount everything in fstab on a temporary mount point
 	while read dev mnt fs rest ; do
 		if [ "$dev" != "none" ] ; then
@@ -71,8 +71,6 @@ clone-fs () {
 			run-cmd "umount $SRC${mnt}"
 		fi
 	done < <(LC_ALL=C trimfile /etc/fstab | sort -r -k2)
-	rmdir $SRC
-
 }
 
 rewrite-grub () {
@@ -141,7 +139,7 @@ cat << EOF >> $DST/etc/fstab
 UUID=$UUID $mnt auto defaults 0 $pass
 EOF
 		fi
-	done < <(LC_ALL=C trimfile $SPEC | sort -r -k2)
+	done < <(LC_ALL=C trimfile $SPEC | sort -k2)
 
 cat << EOF >> $DST/etc/fstab
 none /tmp tmpfs defaults 0 0
@@ -150,22 +148,29 @@ EOF
 	cat $DST/etc/fstab
 }
 
-main () {
-	mkdir -p /tmp/backup
-	second-guess
-	clone-fs
-	rewrite-fstab
-	rewrite-grub
-
+unmount-target-fs () {
 	while read dev mnt rest ; do
 		if [ "$mnt" != "boot-loader" ] ; then
 			run-cmd "umount $DST${mnt}"
 		fi
 	done < <(LC_ALL=C trimfile $SPEC | sort -r -k2)
-sleep 1
-	rmdir $DST
-	rmdir /tmp/backup
+	sleep 1
 }
 
+main () {
+	second-guess
+	mount-target-fs
+	clone-fs
+	rewrite-fstab
+	rewrite-grub
+	unmount-target-fs
+}
+
+mkdir -p /tmp/backup
+DST=$(mktemp -d /tmp/backup/dst.XXXXX)
+SRC=$(mktemp -d /tmp/backup/src.XXXXX)
 main
+rmdir $DST
+rmdir $SRC
+rmdir /tmp/backup
 
