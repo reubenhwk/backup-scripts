@@ -157,12 +157,26 @@ unmount-target-fs () {
 	sleep 1
 }
 
+tag-clone () {
+	srcuuid=unknown
+	while read dev mnt rest ; do
+		if [ "$mnt" == "/" ] ; then
+			srcuuid=$(blkid -s UUID -o value $dev)
+			break
+		fi
+	done < <(cat /proc/mounts)
+
+	mkdir -p $DST/etc/lrc-clone
+	echo "$srcuuid $(date)" >> $DST/etc/lrc-clone/tag.txt
+}
+
 main () {
 	second-guess
 	mount-target-fs
 	clone-fs
 	rewrite-fstab
 	rewrite-grub
+	tag-clone
 	unmount-target-fs
 }
 
