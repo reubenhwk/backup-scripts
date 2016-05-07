@@ -8,6 +8,11 @@
 #define LINES 128
 #define LINE_MAX 1024
 
+typedef struct {
+	int k;
+	int r:1;
+} csort_opt_t;
+
 static char const * col(char const * a, int n)
 {
 	if (n <= 0) {
@@ -27,15 +32,17 @@ static char const * col(char const * a, int n)
 }
 
 static 
-int compar(const void * _a, const void * _b, void * _n)
+int compar(const void * _a, const void * _b, void * _opt)
 {
 	char const * a = (char const*)_a;
 	char const * b = (char const*)_b;
-	int n = *(int*)_n;
+	csort_opt_t *opt = (csort_opt_t*)_opt;
 
-	char const * c0 = col(a, n);
-	char const * c1 = col(b, n);
+	char const * c0 = col(a, opt->k);
+	char const * c1 = col(b, opt->k);
 
+	if (opt->r)
+		return strcmp(c1, c0);
 	return strcmp(c0, c1);
 }
 
@@ -46,23 +53,28 @@ usage(FILE * out, char const * binary)
 		"usage: %s [options]\n"
 		"   -h      this help message\n"
 		"   -k N    sort on column N\n"
+		"   -r      reverse sort\n"
 		, binary
 	);
 }
 
 int main(int argc, char * argv[])
 {
-	int col = 0;
-	int c;
+	csort_opt_t opt = {};
 
-	while (c = getopt(argc, argv, "hk:"), c != -1) {
+	int c;
+	while (c = getopt(argc, argv, "hk:r"), c != -1) {
 		switch (c) {
 			case 'h':
 				usage(stdout, basename(argv[0]));
 				exit(0);
 
 			case 'k':
-				col = atoi(optarg);
+				opt.k = atoi(optarg);
+			break;
+
+			case 'r':
+				opt.r = 1;
 			break;
 
 			default:
@@ -75,7 +87,7 @@ int main(int argc, char * argv[])
 	int line_count = 0;
 	while (line_count < LINES, fgets(lines[line_count++], LINE_MAX, stdin));
 
-	qsort_r(lines, line_count, LINE_MAX, compar, &col);
+	qsort_r(lines, line_count, LINE_MAX, compar, &opt);
 
 	for (int i = 0; i < line_count; ++i) {
 		printf("%s", lines[i]);
