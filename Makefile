@@ -1,7 +1,7 @@
 
 .PHONY: clean
 
-CFLAGS = -std=gnu99
+CFLAGS = -std=gnu99 -D_GNU_SOURCE
 
 all: hdm csort
 
