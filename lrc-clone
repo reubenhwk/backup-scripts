@@ -46,7 +46,7 @@ mount-target-fs () {
 			mkdir -p $DST${mnt}
 			run-cmd "mount $dev $DST${mnt}"
 		fi
-	done < <(LC_ALL=C trimfile $SPEC | sort -k2)
+	done < <(LC_ALL=C trimfile $SPEC | ./csort -k2)
 }
 
 clone-fs () {
@@ -56,7 +56,7 @@ clone-fs () {
 		if [ "$dev" != "none" ] ; then
 			run-cmd "mount $dev $SRC${mnt}"
 		fi
-	done < <(LC_ALL=C trimfile /etc/fstab | sort -k2)
+	done < <(LC_ALL=C trimfile /etc/fstab | ./csort -k2)
 
 	# rsync the temporary mount point SRC to the target device
 	echo "cloning $SRC to $DST"
@@ -65,12 +65,12 @@ clone-fs () {
 		$DST/. || die "rsync failed"
 	mkdir -p $DST/tmp
 
-	# umount everything in the temporary mount point (in reverse order with sort -r)
+	# umount everything in the temporary mount point (in reverse order with ./csort -r)
 	while read dev mnt fs rest ; do
 		if [ "$dev" != "none" ] ; then
 			run-cmd "umount $SRC${mnt}"
 		fi
-	done < <(LC_ALL=C trimfile /etc/fstab | sort -r -k2)
+	done < <(LC_ALL=C trimfile /etc/fstab | ./csort -r -k2)
 }
 
 rewrite-grub () {
@@ -139,7 +139,7 @@ cat << EOF >> $DST/etc/fstab
 UUID=$UUID $mnt auto defaults 0 $pass
 EOF
 		fi
-	done < <(LC_ALL=C trimfile $SPEC | sort -k2)
+	done < <(LC_ALL=C trimfile $SPEC | ./csort -k2)
 
 cat << EOF >> $DST/etc/fstab
 none /tmp tmpfs defaults 0 0
@@ -153,7 +153,7 @@ unmount-target-fs () {
 		if [ "$mnt" != "boot-loader" ] ; then
 			run-cmd "umount $DST${mnt}"
 		fi
-	done < <(LC_ALL=C trimfile $SPEC | sort -r -k2)
+	done < <(LC_ALL=C trimfile $SPEC | ./csort -r -k2)
 	sleep 1
 }
 
