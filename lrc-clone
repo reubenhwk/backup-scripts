@@ -60,9 +60,10 @@ clone-fs () {
 
 	# rsync the temporary mount point SRC to the target device
 	echo "cloning $SRC to $DST"
-	rsync -aEHSv --delete --exclude tmp \
+	rsync -aEHSv --delete --exclude tmp --exclude /var/tmp \
 		$SRC/* \
 		$DST/. || die "rsync failed"
+	mkdir -p $DST/var/tmp
 	mkdir -p $DST/tmp
 
 	# umount everything in the temporary mount point (in reverse order with ./csort -r)
@@ -144,6 +145,12 @@ EOF
 cat << EOF >> $DST/etc/fstab
 none /tmp tmpfs defaults 0 0
 EOF
+
+	if test -d /var/tmp ; then
+cat << EOF >> $DST/etc/fstab
+none /var/tmp tmpfs defaults 0 0
+EOF
+	fi
 
 	cat $DST/etc/fstab
 }
