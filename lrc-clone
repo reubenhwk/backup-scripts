@@ -170,21 +170,26 @@ tag-clone () {
 	echo "$srcuuid $(date)" >> $DST/etc/lrc-clone/tag.txt
 }
 
+cleanup () {
+	unmount-target-fs
+	sleep 2
+	rmdir $DST
+	rmdir $SRC
+	rmdir /tmp/backup
+}
+
 main () {
 	second-guess
 	mount-target-fs
+	trap "cleanup ; exit" INT TERM EXIT
 	clone-fs
 	rewrite-fstab
 	rewrite-grub
 	tag-clone
-	unmount-target-fs
 }
 
 mkdir -p /tmp/backup
 DST=$(mktemp -d /tmp/backup/dst.XXXXX)
 SRC=$(mktemp -d /tmp/backup/src.XXXXX)
 main
-rmdir $DST
-rmdir $SRC
-rmdir /tmp/backup
 
