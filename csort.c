@@ -15,7 +15,7 @@ typedef struct {
 
 static char const * col(char const * a, int n)
 {
-	if (n <= 0) {
+	if (n <= 1) {
 		return a;
 	}
 
@@ -23,7 +23,8 @@ static char const * col(char const * a, int n)
 
 	while (a[i] && isspace(a[i])) ++i;
 
-	while (a[i] && --n > 0) {
+	++n;
+	while (a[i] && --n > 1) {
 		while (a[i] && !isspace(a[i])) ++i;
 		while (a[i] && isspace(a[i])) ++i;
 	}
