@@ -166,7 +166,6 @@ unmount-target-fs () {
 			run-cmd "umount $DST${mnt}"
 		fi
 	done < <(LC_ALL=C trimfile $SPEC | ./csort -r -k2)
-	sleep 1
 }
 
 tag-clone () {
@@ -183,8 +182,9 @@ tag-clone () {
 }
 
 cleanup () {
+	sync
 	unmount-target-fs
-	sleep 2
+	sleep 3
 	rmdir $DST
 	rmdir $SRC
 	rmdir /tmp/backup
