@@ -3,7 +3,12 @@
 
 CFLAGS = -std=gnu99 -D_GNU_SOURCE
 
-all: hdm csort
+TARGETS = hdm csort disk-id
+
+all: $(TARGETS)
+
+disk-id: disk-id.c
+	$(CC) -o $@ $^
 
 csort: csort.o
 	$(CC) -o $@ $^
@@ -15,5 +20,5 @@ hdm: hdm.o
 	$(CC) -c -o $@ $^ $(CFLAGS)
 
 clean:
-	rm -f hdm
+	rm -f $(TARGETS)
 
