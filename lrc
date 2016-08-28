@@ -1,6 +1,16 @@
 #!/usr/bin/env bash
 
+# Securely set PATH (this is only really needed
+# if this script is run by non root with setuid
+# permission bits to run as root).  Do this in
+# two steps so nobody can hack dirname.
+export PATH=/usr/sbin:/sbin:/usr/bin:/bin
 export PATH=$(dirname $0):$PATH
+
+if [ -z "$1" ] ; then
+	echo "usage: $(basename $0) command" >&2
+	exit -1
+fi
 
 cmd=$1
 shift
