@@ -3,7 +3,7 @@
 
 CFLAGS = -std=gnu99 -D_GNU_SOURCE
 
-TARGETS = hdm csort disk-id
+TARGETS = csort disk-id
 
 all: $(TARGETS)
 
@@ -12,9 +12,6 @@ disk-id: disk-id.c
 
 csort: csort.o
 	$(CC) -o $@ $^
-
-hdm: hdm.o
-	$(CC) -o $@ $^ -lparted
 
 %.o: %.c
 	$(CC) -c -o $@ $^ $(CFLAGS)
