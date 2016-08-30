@@ -1,7 +1,13 @@
 #!/usr/bin/env bash
 
+# vim: ts=4 et sw=4
+
 if test -z "$1" ; then
     echo "usage: $0 spec-file" >&2
+    exit 1
+fi
+if ! test -f "$1" ; then
+    echo "ERROR!!! no such file: $1" >&2
     exit 1
 fi
 
@@ -10,6 +16,7 @@ set -e
 
 SPEC=$1
 BOOTDEV=$(cat $SPEC | sed 's/[ \t]\+$//g' | grep 'boot-loader$' | sed 's/[ \t]\+/ /g' | cut -d\  -f1)
+MOUNTS=
 
 die () {
 	echo "error: $@, exiting"
@@ -38,6 +45,11 @@ trimfile () {
 }
 
 mount-target-fs () {
+
+    # This function reads the spec fstab and mounts all
+    # the filesystems in it.  This is where the destination
+    # filesystem is mounted.
+
 	while read dev mnt rest ; do
 		if [ "$mnt" != "boot-loader" ] ; then
 			mkdir -p $DST${mnt}
@@ -52,27 +64,21 @@ clone-fs () {
 	while read dev mnt fs rest ; do
 		if [ "$dev" != "none" ] ; then
 			if [ "$fs" != "" ] ; then
-				run-cmd "mount $dev -t $fs $SRC${mnt}"
+				run-cmd "mount $dev -n -t $fs $SRC${mnt}"
 			else
-				run-cmd "mount $dev $SRC${mnt}"
+				run-cmd "mount $dev -n $SRC${mnt}"
 			fi
 		fi
 	done < <(trimfile /etc/fstab | csort -k2)
 
 	# rsync the temporary mount point SRC to the target device
 	echo "cloning $SRC to $DST"
-	rsync -aEHSv --delete --exclude tmp --exclude /var/tmp \
+	rsync -aEHSv --delete \
+        --exclude tmp --exclude /var/tmp \
 		$SRC/* \
 		$DST/. || die "rsync failed"
 	mkdir -p $DST/var/tmp
 	mkdir -p $DST/tmp
-
-	# umount everything in the temporary mount point (in reverse order with csort -r)
-	while read dev mnt rest ; do
-		if [ "$dev" != "none" ] ; then
-			run-cmd "umount $SRC${mnt}"
-		fi
-	done < <(trimfile /etc/fstab | csort -r -k2)
 }
 
 rewrite-grub () {
@@ -106,13 +112,14 @@ EOF
 		chroot $DST /tmp/grub.sh
 	)
 	rm $DST/tmp/grub.sh
-
-	for d in dev proc run sys ; do
-		umount $DST/$d
-	done
 }
 
 rewrite-fstab () {
+
+	# This function basically reads the spec file
+	# and converts it to /etc/fstab in the destination
+	# filesystem
+
 	echo "writing new $DST/etc/fstab..."
 
 	mkdir -p $DST/etc
@@ -138,34 +145,23 @@ EOF
 
 			fs=${fs:=auto}
 
-cat << EOF >> $DST/etc/fstab
-UUID=$UUID $mnt $fs defaults 0 $pass
-EOF
+			echo "UUID=$UUID $mnt $fs defaults 0 $pass" >> $DST/etc/fstab
 		fi
 	done < <(trimfile $SPEC | csort -k2)
 
-cat << EOF >> $DST/etc/fstab
-none /tmp tmpfs defaults 0 0
-EOF
-
 	if test -d /var/tmp ; then
-cat << EOF >> $DST/etc/fstab
-none /var/tmp tmpfs defaults 0 0
-EOF
+		echo "none /var/tmp tmpfs defaults 0 0" >> $DST/etc/fstab
 	fi
+
+	echo "none /tmp tmpfs defaults 0 0" >> $DST/etc/fstab
 
 	cat $DST/etc/fstab
 }
 
-unmount-target-fs () {
-	while read dev mnt rest ; do
-		if [ "$mnt" != "boot-loader" ] ; then
-			run-cmd "umount $DST${mnt}"
-		fi
-	done < <(trimfile $SPEC | csort -r -k2)
-}
-
 tag-clone () {
+	# Find the UUID of the root filesystem and append it,
+	# along with the date, to the end of /etc/tag.txt on
+	# the destination filesystem.
 	srcuuid=unknown
 	while read dev mnt rest ; do
 		if [ "$mnt" == "/" ] ; then
@@ -178,27 +174,51 @@ tag-clone () {
 	echo "$srcuuid $(date)" >> $DST/etc/lrc-clone/tag.txt
 }
 
-cleanup () {
+unmount_all () {
+    # walk /proc/mounts unmounting anything that starts
+    # with $TMP.  Pause one second between each walk.
+    # When nothing in /proc/mounts belongs to this
+    # backup, then everything is fully unmounted and the
+    # mount points can safely be removed.
 	sync
-	unmount-target-fs
-	sleep 3
-	rmdir $DST
-	rmdir $SRC
-	rmdir /tmp/backup
+    local count=1
+    while (( $count > 0 )) ; do
+        count=0
+        while read mnt rest ; do
+            if [[ $mnt =~ $TMP/.* ]] ; then
+                run-cmd "umount $mnt"
+                count=$(( $count + 1 ))
+            fi
+        done < <(cat /proc/mounts | awk '{print $2}' | csort -r)
+        if (( $count > 0 )) ; then
+            sleep 1
+        fi
+    done
+}
+
+cleanup () {
+    unmount_all
+	test -d $SRC && rmdir $SRC
+	test -d $DST && rmdir $DST
+	test -d $TMP && rmdir $TMP
 }
 
 main () {
 	second-guess
-	mount-target-fs
+
+    TMP=$(mktemp -d ${TMP:=/tmp}/backup.XXXXX)
 	trap "cleanup ; exit" INT TERM EXIT
+    echo "tmp is $TMP"
+    mkdir -p $TMP/{src,dst}
+    DST=$TMP/dst
+    SRC=$TMP/src
+	mount-target-fs
+
 	clone-fs
 	rewrite-fstab
 	rewrite-grub
 	tag-clone
 }
 
-mkdir -p /tmp/backup
-DST=$(mktemp -d /tmp/backup/dst.XXXXX)
-SRC=$(mktemp -d /tmp/backup/src.XXXXX)
 main
 
