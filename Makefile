@@ -17,5 +17,5 @@ csort: csort.o
 	$(CC) -c -o $@ $^ $(CFLAGS)
 
 clean:
-	rm -f $(TARGETS)
+	rm -f $(TARGETS) *.o
 
