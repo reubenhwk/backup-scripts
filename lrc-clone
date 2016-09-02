@@ -91,7 +91,9 @@ rewrite-grub () {
 
 	mkdir -p $DST/etc/default
 
-cat << EOF > $DST/etc/default/grub
+#cat << EOF > $DST/etc/default/grub
+mkdir -p $DST/opt/lrc-backup/grub/etc/default
+cat << EOF > $DST/opt/lrc-backup/grub/etc/default/grub
 GRUB_DEFAULT=0
 GRUB_TIMEOUT=20
 GRUB_DISTRIBUTOR="Backup/Clone - $(date)"
@@ -103,8 +105,8 @@ cat << EOF > $DST/tmp/grub.sh
 #!/usr/bin/env bash
 sed -i 's/GRUB_TIMEOUT=.*$/GRUB_TIMEOUT=30/g' /etc/default/grub
 echo GRUB_DISABLE_OS_PROBER=true >> /etc/default/grub
-grub-install $BOOTDEV
-update-grub
+/opt/lrc-backup/grub/sbin/grub-install $BOOTDEV
+/opt/lrc-backup/grub/sbin/grub-mkconfig -o /boot/grub/grub.cfg
 EOF
 
 	chmod +x $DST/tmp/grub.sh
