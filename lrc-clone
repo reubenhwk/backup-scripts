@@ -3,7 +3,7 @@
 # vim: ts=4 et sw=4
 
 if test -z "$1" ; then
-    echo "usage: $0 spec-file" >&2
+    echo "usage: $0 backup.fstab" >&2
     exit 1
 fi
 if ! test -f "$1" ; then
@@ -14,8 +14,8 @@ fi
 set -u
 set -e
 
-SPEC=$1
-BOOTDEV=$(cat $SPEC | sed 's/[ \t]\+$//g' | grep 'boot-loader$' | sed 's/[ \t]\+/ /g' | cut -d\  -f1)
+BACKUP_FSTAB=$1
+BOOTDEV=$(cat $BACKUP_FSTAB | sed 's/[ \t]\+$//g' | grep 'boot-loader$' | sed 's/[ \t]\+/ /g' | cut -d\  -f1)
 MOUNTS=
 
 die () {
@@ -55,12 +55,15 @@ mount-target-fs () {
 			mkdir -p $DST${mnt}
 			run-cmd "mount $dev $DST${mnt}"
 		fi
-	done < <(trimfile $SPEC | csort -k2)
+	done < <(trimfile $BACKUP_FSTAB | csort -k2)
 }
 
 clone-fs () {
 
-	# remount everything in fstab on a temporary mount point
+	# remount everything in /etc/fstab on a temporary mount point.  This
+    # way we don't end up trying to backup /proc, /sys, /tmp and other
+    # mount points we don't care about.  We only want to backup the
+    # filesystems on /etc/fstab.
 	while read dev mnt fs rest ; do
 		if [ "$dev" != "none" ] ; then
 			if [ "$fs" != "" ] ; then
@@ -71,12 +74,16 @@ clone-fs () {
 		fi
 	done < <(trimfile /etc/fstab | csort -k2)
 
-	# rsync the temporary mount point SRC to the target device
+	# rsync the temporary mount point SRC to the destination DST
 	echo "cloning $SRC to $DST"
 	rsync -aEHSv --delete \
-        --exclude tmp --exclude /var/tmp \
+        --exclude tmp
+        --exclude var/tmp \
 		$SRC/* \
 		$DST/. || die "rsync failed"
+
+    # These were excluded from the rsync.  Make sure they exist
+    # in the destination filesystem.
 	mkdir -p $DST/var/tmp
 	mkdir -p $DST/tmp
 }
@@ -84,14 +91,15 @@ clone-fs () {
 rewrite-grub () {
 	echo "installing GRUB2 on $BOOTDEV"
 
+    # These are used by many tools these days and will need to be
+    # mounted for chrooting to the destination filesystem.  We chroot
+    # and do some final setup, such as the boot loader.
 	for d in dev proc run sys ; do
 		mkdir -p $DST/$d
 		mount --bind /$d $DST/$d || die "failed to mount --bind /$d $DST/$d"
 	done
 
-	mkdir -p $DST/etc/default
-
-#cat << EOF > $DST/etc/default/grub
+# Write an updated grub config
 mkdir -p $DST/opt/lrc-backup/grub/etc/default
 cat << EOF > $DST/opt/lrc-backup/grub/etc/default/grub
 GRUB_DEFAULT=0
@@ -101,6 +109,8 @@ GRUB_DISTRIBUTOR="Backup/Clone - $(date)"
 GRUB_CMDLINE_LINUX=""
 EOF
 
+# Write a script which we'll run in the chrooted destination
+# filesystem.  This will setup grub.
 cat << EOF > $DST/tmp/grub.sh
 #!/usr/bin/env bash
 sed -i 's/GRUB_TIMEOUT=.*$/GRUB_TIMEOUT=30/g' /etc/default/grub
@@ -126,6 +136,7 @@ rewrite-fstab () {
 
 	mkdir -p $DST/etc
 
+# Write the fstab header
 cat << EOF > $DST/etc/fstab
 # /etc/fstab: static file system information.
 #
@@ -136,6 +147,8 @@ cat << EOF > $DST/etc/fstab
 # <file system> <mount point>   <type>  <options>       <dump>  <pass>
 EOF
 
+    # Read the backup fstab as input, write out the UUID's to the
+    # updated /etc/fstab on the destination filesystem.
 	while read dev mnt fs rest ; do
 		if [ "$mnt" != "boot-loader" ] ; then
 			local UUID=$(blkid $dev| cut -d\" -f2)
@@ -149,21 +162,21 @@ EOF
 
 			echo "UUID=$UUID $mnt $fs defaults 0 $pass" >> $DST/etc/fstab
 		fi
-	done < <(trimfile $SPEC | csort -k2)
+	done < <(trimfile $BACKUP_FSTAB | csort -k2)
 
-	if test -d /var/tmp ; then
-		echo "none /var/tmp tmpfs defaults 0 0" >> $DST/etc/fstab
-	fi
-
+    # Make sure these temp filesystems are mounted as tmpfs
+	echo "none /var/tmp tmpfs defaults 0 0" >> $DST/etc/fstab
 	echo "none /tmp tmpfs defaults 0 0" >> $DST/etc/fstab
 
+    # Show the result
 	cat $DST/etc/fstab
 }
 
 tag-clone () {
 	# Find the UUID of the root filesystem and append it,
 	# along with the date, to the end of /etc/tag.txt on
-	# the destination filesystem.
+	# the destination filesystem.  This gives a kind of
+    # lineage of the backup.
 	srcuuid=unknown
 	while read dev mnt rest ; do
 		if [ "$mnt" == "/" ] ; then
