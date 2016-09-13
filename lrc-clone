@@ -77,13 +77,15 @@ clone-fs () {
 	# rsync the temporary mount point SRC to the destination DST
 	echo "cloning $SRC to $DST"
 	rsync -aEHSv --delete \
-        --exclude tmp \
+        --exclude var/run \
         --exclude var/tmp \
+        --exclude tmp \
 		$SRC/* \
 		$DST/. || die "rsync failed"
 
     # These were excluded from the rsync.  Make sure they exist
     # in the destination filesystem.
+	mkdir -p $DST/var/run
 	mkdir -p $DST/var/tmp
 	mkdir -p $DST/tmp
 }
@@ -165,6 +167,7 @@ EOF
 	done < <(trimfile $BACKUP_FSTAB | csort -k2)
 
     # Make sure these temp filesystems are mounted as tmpfs
+	echo "none /var/run tmpfs defaults 0 0" >> $DST/etc/fstab
 	echo "none /var/tmp tmpfs defaults 0 0" >> $DST/etc/fstab
 	echo "none /tmp tmpfs defaults 0 0" >> $DST/etc/fstab
 
