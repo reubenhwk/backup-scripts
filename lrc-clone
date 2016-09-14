@@ -166,9 +166,6 @@ EOF
 		fi
 	done < <(trimfile $BACKUP_FSTAB | csort -k2)
 
-    # Make sure these temp filesystems are mounted as tmpfs
-	echo "none /var/run tmpfs defaults 0 0" >> $DST/etc/fstab
-	echo "none /var/tmp tmpfs defaults 0 0" >> $DST/etc/fstab
 	echo "none /tmp tmpfs defaults 0 0" >> $DST/etc/fstab
 
     # Show the result
