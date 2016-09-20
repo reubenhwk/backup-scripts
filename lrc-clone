@@ -66,11 +66,8 @@ clone-fs () {
     # filesystems on /etc/fstab.
 	while read dev mnt fs rest ; do
 		if [ "$dev" != "none" ] ; then
-			if [ "$fs" != "" ] ; then
-				run-cmd "mount $dev -n -t $fs $SRC${mnt}"
-			else
-				run-cmd "mount $dev -n $SRC${mnt}"
-			fi
+		    run-cmd "mount --bind $mnt $SRC${mnt}"
+		    run-cmd "mount -o remount,ro $SRC${mnt}"
 		fi
 	done < <(trimfile /etc/fstab | csort -k2)
 
