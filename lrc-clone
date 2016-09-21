@@ -11,17 +11,20 @@ if ! test -f "$1" ; then
     exit 1
 fi
 
+die () {
+	echo "error: $@, exiting"
+	exit 1
+}
+
+exec 200>/var/lock/.lrc-clone.lock
+flock -n 200 || die "another instance of lrc-clone is already running"
+
 set -u
 set -e
 
 BACKUP_FSTAB=$1
 BOOTDEV=$(cat $BACKUP_FSTAB | sed 's/[ \t]\+$//g' | grep 'boot-loader$' | sed 's/[ \t]\+/ /g' | cut -d\  -f1)
 MOUNTS=
-
-die () {
-	echo "error: $@, exiting"
-	exit 1
-}
 
 run-cmd () {
 	echo "$1"
