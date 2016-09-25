@@ -1,0 +1,46 @@
+#!/usr/bin/env bash
+
+#exec 200>/var/lock/lrc-livecd
+#flock -n 200 || exit 1
+
+RELEASE=xenial
+
+if ! test -d /var/chroot/$RELEASE ; then
+	debootstrap $RELEASE /var/chroot/$RELEASE.part http://archive.ubuntu.com/ubuntu
+	mv /var/chroot/$RELEASE.part /var/chroot/$RELEASE
+fi
+
+cat << EOF > /var/chroot/$RELEASE/finish-up.sh
+#!/usr/bin/env bash
+
+mount none -t proc /proc
+mount none -t sysfs /sys
+mount none -t devpts /dev/pts
+
+export HOME=/root
+export LC_ALL=C
+
+apt-get update
+apt-get upgrade
+apt-get install --yes \
+	btrfs-tools \
+	casper \
+	dbus \
+	e2fsprogs \
+	lvm2 \
+	reiser4progs \
+	reiserfsprogs \
+	squashfs-tools \
+	vim \
+	xfsprogs
+
+dbus-uuidgen > /var/lib/dbus/machine-id
+
+umount /proc
+umount /sys
+umount /dev/pts
+EOF
+
+chmod +x /var/chroot/$RELEASE/finish-up.sh
+
+chroot /var/chroot/$RELEASE finish-up.sh
