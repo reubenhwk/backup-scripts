@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 
+# Directions loosly taken from here: https://help.ubuntu.com/community/MakeALiveCD/DVD/BootableFlashFromHarddiskInstall
+
 #exec 200>/var/lock/lrc-livecd
 #flock -n 200 || exit 1
 
@@ -26,15 +28,19 @@ apt-get install --yes \
 	btrfs-tools \
 	casper \
 	dbus \
+	discover \
 	e2fsprogs \
+	laptop-detect \
+	linux-generic \
+	lupin-casper \
 	lvm2 \
+	os-prober \
 	reiser4progs \
 	reiserfsprogs \
 	squashfs-tools \
+	ubuntu-standard \
 	vim \
 	xfsprogs
-
-dbus-uuidgen > /var/lib/dbus/machine-id
 
 umount /proc
 umount /sys
