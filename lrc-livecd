@@ -5,15 +5,23 @@
 #exec 200>/var/lock/lrc-livecd
 #flock -n 200 || exit 1
 
+RELEASE=trusty
 RELEASE=xenial
 
 if ! test -d /var/chroot/$RELEASE ; then
-	debootstrap $RELEASE /var/chroot/$RELEASE.part http://archive.ubuntu.com/ubuntu
+	debootstrap \
+		--variant=minbase \
+		--include=grub-pc \
+		$RELEASE \
+		/var/chroot/$RELEASE.part \
+		http://archive.ubuntu.com/ubuntu
 	mv /var/chroot/$RELEASE.part /var/chroot/$RELEASE
 fi
 
 cat << EOF > /var/chroot/$RELEASE/finish-up.sh
 #!/usr/bin/env bash
+
+set -x
 
 mount none -t proc /proc
 mount none -t sysfs /sys
@@ -23,26 +31,26 @@ export HOME=/root
 export LC_ALL=C
 
 apt-get update
-apt-get upgrade
+apt-get upgrade --yes
 apt-get install --yes \
 	btrfs-tools \
 	casper \
-	dbus \
-	discover \
 	e2fsprogs \
+	jfsutils \
 	laptop-detect \
 	linux-generic \
 	lupin-casper \
 	lvm2 \
 	os-prober \
-	reiser4progs \
 	reiserfsprogs \
 	squashfs-tools \
 	ubuntu-standard \
 	vim \
 	xfsprogs
-
+update-initramfs
+update-grub
 umount /proc
+umount /sys/kernel/security
 umount /sys
 umount /dev/pts
 EOF
@@ -50,3 +58,63 @@ EOF
 chmod +x /var/chroot/$RELEASE/finish-up.sh
 
 chroot /var/chroot/$RELEASE finish-up.sh
+
+#rm -rf cdroot
+mkdir -p cdroot/{casper,boot/grub}
+
+#mksquashfs /var/chroot/$RELEASE $RELEASE.squashfs.part -noappend && \
+#	mv $RELEASE.squashfs.part cdroot/casper/filesystem.squashfs
+
+cp -r /var/chroot/$RELEASE/boot/* cdroot/boot/.
+
+(
+	cd cdroot/boot
+	ln -s $(ls -1 vmlinuz*) vmlinuz
+	ln -s $(ls -1 initrd.img*) initrd.img
+)
+
+cat << EOF > cdroot/boot/grub/grub.cfg
+set default="0"
+set timeout=20
+
+menuentry "Ubuntu CLI" {
+linux /boot/vmlinuz boot=casper textonly
+initrd /boot/initrd.img
+}
+
+menuentry "Ubuntu GUI" {
+linux /boot/vmlinuz boot=casper quiet splash
+initrd /boot/initrd.img
+}
+
+menuentry "Ubuntu in safe mode" {
+linux /boot/vmlinuz boot=casper xforcevesa
+initrd /boot/initrd.img
+}
+
+menuentry "Ubuntu GUI persistent mode" {
+linux /boot/vmlinuz boot=casper persistent quiet splash
+initrd /boot/initrd.img
+}
+
+menuentry "Ubuntu GUI from RAM" {
+linux /boot/vmlinuz boot=casper toram quiet splash
+initrd /boot/initrd.img
+}
+
+menuentry "Check Disk for Defects" {
+linux /boot/vmlinuz boot=casper integrity-check quiet splash
+initrd /boot/initrd.img
+}
+
+menuentry "Memory Test" {
+linux16 /boot/memtest86+.bin
+}
+
+menuentry "Boot from the first hard disk" {
+set root=(hd0)
+chainloader +1
+}
+EOF
+
+grub-mkrescue -o live-cd.iso cdroot
