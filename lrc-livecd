@@ -47,8 +47,9 @@ apt-get install --yes \
 	ubuntu-standard \
 	vim \
 	xfsprogs
-update-initramfs
+update-initramfs -u
 update-grub
+printf "root\nroot\n" | passwd
 umount /proc
 umount /sys/kernel/security
 umount /sys
@@ -59,11 +60,11 @@ chmod +x /var/chroot/$RELEASE/finish-up.sh
 
 chroot /var/chroot/$RELEASE finish-up.sh
 
-#rm -rf cdroot
+rm -rf cdroot
 mkdir -p cdroot/{casper,boot/grub}
 
-#mksquashfs /var/chroot/$RELEASE $RELEASE.squashfs.part -noappend && \
-#	mv $RELEASE.squashfs.part cdroot/casper/filesystem.squashfs
+mksquashfs /var/chroot/$RELEASE $RELEASE.squashfs.part -noappend && \
+	mv $RELEASE.squashfs.part cdroot/casper/filesystem.squashfs
 
 cp -r /var/chroot/$RELEASE/boot/* cdroot/boot/.
 
@@ -118,3 +119,4 @@ chainloader +1
 EOF
 
 grub-mkrescue -o live-cd.iso cdroot
+
