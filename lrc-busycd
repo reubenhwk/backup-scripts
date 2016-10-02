@@ -1,0 +1,73 @@
+#!/usr/bin/env bash
+
+set -x
+
+#exec 200>/var/lock/lrc-livecd
+#flock -n 200 || exit 1
+
+export CDROOT=busycd
+
+rm -rf $CDROOT
+mkdir -p $CDROOT
+(
+cd $CDROOT
+mkdir -p bin
+mkdir -p boot/grub
+mkdir -p dev
+mkdir -p etc
+mkdir -p lib
+mkdir -p opt
+mkdir -p proc
+mkdir -p root
+mkdir -p run
+mkdir -p sbin
+mkdir -p sys
+mkdir -p usr
+mkdir -p usr/bin
+mkdir -p usr/lib
+mkdir -p usr/local
+mkdir -p usr/sbin
+mkdir -p usr/share
+mkdir -p var
+)
+
+copyit () {
+	mkdir -p $(dirname $2)
+	cp -L $1 $2
+}
+
+copyit /bin/busybox $CDROOT/bin
+copyit /lib/x86_64-linux-gnu/libc.so.6 $CDROOT/lib/x86_64-linux-gnu/libc.so.6
+
+mksquashfs /var/chroot/$RELEASE $RELEASE.squashfs.part -noappend && \
+	mv $RELEASE.squashfs.part cdroot/casper/filesystem.squashfs
+
+cp -r /boot/* $CDROOT/boot/.
+
+(
+	cd cdroot/boot
+	ln -s $(ls -1Srt vmlinuz* | tail -n 1) vmlinuz
+	ln -s $(ls -1Srt initrd.img* | tail -n 1) initrd.img
+)
+
+cat << EOF > $CDROOT/boot/grub/grub.cfg
+set default="0"
+set timeout=20
+
+menuentry "Ubuntu CLI" {
+linux /boot/vmlinuz boot=casper textonly
+initrd /boot/initrd.img
+}
+
+menuentry "Memory Test" {
+linux16 /boot/memtest86+.bin
+}
+
+menuentry "Boot from the first hard disk" {
+set root=(hd0)
+chainloader +1
+}
+EOF
+
+grub-mkrescue -o busy-cd.iso $CDROOT
+
