@@ -1,34 +1,39 @@
 #!/usr/bin/env bash
 
-set -x
+set -x -e
 
 #exec 200>/var/lock/lrc-livecd
 #flock -n 200 || exit 1
 
+export ROOT=busycd-rootfs
 export CDROOT=busycd
 
-rm -rf $CDROOT
-mkdir -p $CDROOT
+rm -rf $ROOT
+mkdir -p $ROOT
 (
-cd $CDROOT
-mkdir -p bin
-mkdir -p boot/grub
-mkdir -p dev
-mkdir -p etc
-mkdir -p lib
-mkdir -p opt
-mkdir -p proc
-mkdir -p root
-mkdir -p run
-mkdir -p sbin
-mkdir -p sys
-mkdir -p usr
-mkdir -p usr/bin
-mkdir -p usr/lib
-mkdir -p usr/local
-mkdir -p usr/sbin
-mkdir -p usr/share
-mkdir -p var
+cd $ROOT
+mkdir bin
+mkdir boot
+mkdir boot/grub
+mkdir dev
+mkdir etc
+mkdir etc/init.d
+mkdir etc/rc.d
+mkdir lib
+mkdir lib64
+mkdir opt
+mkdir proc
+mkdir root
+mkdir run
+mkdir sbin
+mkdir sys
+mkdir usr
+mkdir usr/bin
+mkdir usr/lib
+mkdir usr/local
+mkdir usr/sbin
+mkdir usr/share
+mkdir var
 )
 
 copyit () {
@@ -36,18 +41,39 @@ copyit () {
 	cp -L $1 $2
 }
 
-copyit /bin/busybox $CDROOT/bin
-copyit /lib/x86_64-linux-gnu/libc.so.6 $CDROOT/lib/x86_64-linux-gnu/libc.so.6
+copyit /lib/x86_64-linux-gnu/libc.so.6 $ROOT/lib/x86_64-linux-gnu/.
+copyit /lib64/ld-linux-x86-64.so.2 $ROOT/lib64/.
+copyit /bin/busybox $ROOT/bin/.
 
-mksquashfs /var/chroot/$RELEASE $RELEASE.squashfs.part -noappend && \
-	mv $RELEASE.squashfs.part cdroot/casper/filesystem.squashfs
+chroot $ROOT /bin/busybox --install
 
-cp -r /boot/* $CDROOT/boot/.
+cat << EOF > $ROOT/etc/inittab
+::sysinit:/etc/init.d/rcS S boot
+EOF
+
+cat << EOF > $ROOT/etc/rc.d/rcS
+::sysinit:/etc/init.d/rcS S boot
+EOF
+chmod +x $ROOT/etc/rc.d/rcS
+
+
+rm -rf $CDROOT
+mkdir $CDROOT
+mkdir $CDROOT/boot
+mkdir $CDROOT/boot/grub
+mkdir $CDROOT/casper
+
+cp /boot/System.map-$(uname -r) $CDROOT/boot/.
+cp /boot/abi-$(uname -r) $CDROOT/boot/.
+cp /boot/config-$(uname -r) $CDROOT/boot/.
+cp /boot/initrd.img-$(uname -r) $CDROOT/boot/.
+cp /boot/vmlinuz-$(uname -r) $CDROOT/boot/.
+cp -r /boot/grub $CDROOT/boot/.
 
 (
-	cd cdroot/boot
-	ln -s $(ls -1Srt vmlinuz* | tail -n 1) vmlinuz
-	ln -s $(ls -1Srt initrd.img* | tail -n 1) initrd.img
+	cd $CDROOT/boot
+	ln -s vmlinuz-$(uname -r) vmlinuz
+	ln -s initrd.img-$(uname -r) initrd.img
 )
 
 cat << EOF > $CDROOT/boot/grub/grub.cfg
@@ -55,7 +81,7 @@ set default="0"
 set timeout=20
 
 menuentry "Ubuntu CLI" {
-linux /boot/vmlinuz boot=casper textonly
+linux /boot/vmlinuz textonly
 initrd /boot/initrd.img
 }
 
@@ -68,6 +94,8 @@ set root=(hd0)
 chainloader +1
 }
 EOF
+
+mksquashfs $ROOT $CDROOT/casper/filesystem.squashfs
 
 grub-mkrescue -o busy-cd.iso $CDROOT
 
