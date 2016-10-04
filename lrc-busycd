@@ -20,6 +20,7 @@ mkdir etc
 mkdir etc/init.d
 mkdir etc/rc.d
 mkdir lib
+mkdir lib/modules
 mkdir lib64
 mkdir opt
 mkdir proc
@@ -56,6 +57,7 @@ cat << EOF > $ROOT/etc/rc.d/rcS
 EOF
 chmod +x $ROOT/etc/rc.d/rcS
 
+cp -r /lib/modules/$(uname -r) $ROOT/lib/modules/.
 
 rm -rf $CDROOT
 mkdir $CDROOT
@@ -81,7 +83,7 @@ set default="0"
 set timeout=20
 
 menuentry "Ubuntu CLI" {
-linux /boot/vmlinuz textonly
+linux /boot/vmlinuz vga=791 textonly
 initrd /boot/initrd.img
 }
 
