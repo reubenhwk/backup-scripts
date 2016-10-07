@@ -5,8 +5,8 @@ set -x -e
 #exec 200>/var/lock/lrc-livecd
 #flock -n 200 || exit 1
 
-export ROOT=busycd-rootfs
-export CDROOT=busycd
+export ROOT=$(pwd)/busycd-rootfs
+export CDROOT=$(pwd)/busycd
 
 rm -rf $ROOT
 mkdir -p $ROOT
@@ -48,22 +48,20 @@ copyit /bin/busybox $ROOT/bin/.
 
 chroot $ROOT /bin/busybox --install
 
-cat << EOF > $ROOT/etc/inittab
-::sysinit:/etc/init.d/rcS S boot
+cat << EOF > $ROOT/etc/init.d/rcS
+mount none -t devtmpfs /dev
+mount none -t proc /proc
+mount none -t sysfs /sys
 EOF
+chmod +x $ROOT/etc/init.d/rcS
 
-cat << EOF > $ROOT/etc/rc.d/rcS
-::sysinit:/etc/init.d/rcS S boot
-EOF
-chmod +x $ROOT/etc/rc.d/rcS
-
-cp -r /lib/modules/$(uname -r) $ROOT/lib/modules/.
+# cp -r /lib/modules/$(uname -r) $ROOT/lib/modules/.
 
 rm -rf $CDROOT
 mkdir $CDROOT
+mkdir $CDROOT/etc
 mkdir $CDROOT/boot
 mkdir $CDROOT/boot/grub
-mkdir $CDROOT/casper
 
 cp /boot/System.map-$(uname -r) $CDROOT/boot/.
 cp /boot/abi-$(uname -r) $CDROOT/boot/.
@@ -76,6 +74,34 @@ cp -r /boot/grub $CDROOT/boot/.
 	cd $CDROOT/boot
 	ln -s vmlinuz-$(uname -r) vmlinuz
 	ln -s initrd.img-$(uname -r) initrd.img
+)
+
+INITRAMFS=initramfs
+rm -rf $INITRAMFS
+mkdir $INITRAMFS
+(
+cd $INITRAMFS
+
+mkdir cdrom
+mkdir dev
+mkdir mnt
+mkdir proc
+mkdir rootfs
+mkdir sys
+
+cat << EOF > init
+#!/bin/sh
+mount none -t devtmpfs /dev
+mount none -t proc /proc
+mount none -t sysfs /sys
+modprobe iso9660
+mount /dev/sr0 /cdrom
+mount /cdrom/filesystem.squashfs /rootfs
+exec switch_root /rootfs /sbin/init
+EOF
+chmod +x init
+
+find . | cpio -v --create --format='newc' >> $CDROOT/boot/initrd.img
 )
 
 cat << EOF > $CDROOT/boot/grub/grub.cfg
@@ -97,7 +123,7 @@ chainloader +1
 }
 EOF
 
-mksquashfs $ROOT $CDROOT/casper/filesystem.squashfs
+mksquashfs $ROOT $CDROOT/filesystem.squashfs
 
 grub-mkrescue -o busy-cd.iso $CDROOT
 
