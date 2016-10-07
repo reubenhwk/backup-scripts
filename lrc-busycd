@@ -101,7 +101,7 @@ exec switch_root /rootfs /sbin/init
 EOF
 chmod +x init
 
-find . | cpio -v --create --format='newc' >> $CDROOT/boot/initrd.img
+find . | cpio -v --create --format='newc' | gzip >> $CDROOT/boot/initrd.img
 )
 
 cat << EOF > $CDROOT/boot/grub/grub.cfg
