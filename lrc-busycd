@@ -55,7 +55,7 @@ mount none -t sysfs /sys
 EOF
 chmod +x $ROOT/etc/init.d/rcS
 
-# cp -r /lib/modules/$(uname -r) $ROOT/lib/modules/.
+cp -r /lib/modules/$(uname -r) $ROOT/lib/modules/.
 
 rm -rf $CDROOT
 mkdir $CDROOT
