@@ -1,5 +1,5 @@
 
-This software makes a bootable close of your system to another storage device,
+This software makes a bootable clone of your system to another storage device,
 or set of storage devices.  Currently, only BIOS is supported.  There is no
 GPT/EFI support.
 
