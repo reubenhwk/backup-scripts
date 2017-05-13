@@ -2,128 +2,146 @@
 
 set -x -e
 
-#exec 200>/var/lock/lrc-livecd
-#flock -n 200 || exit 1
+# Make sure only one instance of this
+# script is running at a time.
+exec 200>/var/lock/lrc-busycd
+flock -n 200 || exit 1
 
-export ROOT=$(pwd)/busycd-rootfs
-export CDROOT=$(pwd)/busycd
 
-rm -rf $ROOT
-mkdir -p $ROOT
-(
-cd $ROOT
-mkdir bin
-mkdir boot
-mkdir boot/grub
-mkdir dev
-mkdir etc
-mkdir etc/init.d
-mkdir etc/rc.d
-mkdir lib
-mkdir lib/modules
-mkdir lib64
-mkdir opt
-mkdir proc
-mkdir root
-mkdir run
-mkdir sbin
-mkdir sys
-mkdir usr
-mkdir usr/bin
-mkdir usr/lib
-mkdir usr/local
-mkdir usr/sbin
-mkdir usr/share
-mkdir var
-)
-
+# Make sure the path to the file
+# exists, then copy the file, and
+# copy the target if this is a link.
 copyit () {
 	mkdir -p $(dirname $2)
 	cp -L $1 $2
 }
 
-copyit /lib/x86_64-linux-gnu/libc.so.6 $ROOT/lib/x86_64-linux-gnu/.
-copyit /lib64/ld-linux-x86-64.so.2 $ROOT/lib64/.
-copyit /bin/busybox $ROOT/bin/.
 
-chroot $ROOT /bin/busybox --install
-
-cat << EOF > $ROOT/etc/init.d/rcS
-mount none -t devtmpfs /dev
-mount none -t proc /proc
-mount none -t sysfs /sys
-EOF
-chmod +x $ROOT/etc/init.d/rcS
-
-cp -r /lib/modules/$(uname -r) $ROOT/lib/modules/.
-
-rm -rf $CDROOT
-mkdir $CDROOT
-mkdir $CDROOT/etc
-mkdir $CDROOT/boot
-mkdir $CDROOT/boot/grub
-
-cp /boot/System.map-$(uname -r) $CDROOT/boot/.
-cp /boot/abi-$(uname -r) $CDROOT/boot/.
-cp /boot/config-$(uname -r) $CDROOT/boot/.
-cp /boot/initrd.img-$(uname -r) $CDROOT/boot/.
-cp /boot/vmlinuz-$(uname -r) $CDROOT/boot/.
-cp -r /boot/grub $CDROOT/boot/.
-
+rm -rf busycd
+mkdir busycd
 (
-	cd $CDROOT/boot
-	ln -s vmlinuz-$(uname -r) vmlinuz
-	ln -s initrd.img-$(uname -r) initrd.img
+	cd busycd
+
+	# These are all we need.
+	mkdir etc
+	mkdir boot
+	mkdir boot/grub
+
+	# Copy over the kernel
+	cp /boot/System.map-$(uname -r)   boot/.
+	cp /boot/abi-$(uname -r)          boot/.
+	cp /boot/config-$(uname -r)       boot/.
+	cp /boot/initrd.img-$(uname -r)   boot/.
+	cp /boot/vmlinuz-$(uname -r)      boot/.
+
+	# Build a root filesystem
+	mkdir rootfs
+	(
+		cd rootfs
+
+		mkdir bin
+		mkdir boot
+		mkdir boot/grub
+		mkdir dev
+		mkdir etc
+		mkdir etc/init.d
+		mkdir etc/rc.d
+		mkdir lib
+		mkdir lib/modules
+		mkdir lib64
+		mkdir opt
+		mkdir proc
+		mkdir root
+		mkdir run
+		mkdir sbin
+		mkdir sys
+		mkdir usr
+		mkdir usr/bin
+		mkdir usr/lib
+		mkdir usr/local
+		mkdir usr/sbin
+		mkdir usr/share
+		mkdir var
+
+		# Copy the two most important share objects
+		copyit /lib/x86_64-linux-gnu/libc.so.6 lib/x86_64-linux-gnu/.
+		copyit /lib64/ld-linux-x86-64.so.2 lib64/.
+
+		# Copy and install busybox
+		copyit /bin/busybox bin/.
+		chroot . /bin/busybox --install
+
+		# Init will run this rc file, which will mount
+		# these filesystems.
+		cat <<-EOF > etc/init.d/rcS
+			mount none -t devtmpfs /dev
+			mount none -t proc /proc
+			mount none -t sysfs /sys
+			EOF
+		chmod +x etc/init.d/rcS
+
+		# The kernel is going to need its modules...
+		cp -r /lib/modules/$(uname -r) lib/modules/.
+	)
+	mksquashfs rootfs rootfs.squashfs
+	rm -rf rootfs
+
+	# Append a few things to the initramfs
+	mkdir initramfs
+	(
+		cd initramfs
+
+		mkdir cdrom
+		mkdir dev
+		mkdir mnt
+		mkdir proc
+		mkdir rootfs
+		mkdir sys
+
+		cat <<-EOF > init
+			#!/bin/sh
+			mount none -t devtmpfs /dev
+			mount none -t proc /proc
+			mount none -t sysfs /sys
+			modprobe iso9660
+			mount /dev/sr0 /cdrom
+			mount /cdrom/rootfs.squashfs /rootfs
+			exec switch_root /rootfs /sbin/init
+			EOF
+		chmod +x init
+
+		# Unfortunately, the initrd is in multiple cpio formats, so it's not easy
+		# to examine the contents.  This command will, nonetheless, append the above
+		# directories and init to the cpio (possibly overwriting the ones already
+		# there in the one we copied from /boot).
+		find . | cpio -v --create --format='newc' | gzip >> ../boot/initrd.img-$(uname -r)
+	)
+	rm -rf initramfs
+
+	# Copy the grub stuff
+	cp -r /boot/grub                  boot/.
+
+	# Output a grub config
+	cat <<-EOF > boot/grub/grub.cfg
+		set default="0"
+		set timeout=20
+
+		menuentry "Ubuntu CLI" {
+		linux /boot/vmlinuz-$(uname -r) vga=791 textonly
+		initrd /boot/initrd.img-$(uname -r)
+		}
+
+		menuentry "Memory Test" {
+		linux16 /boot/memtest86+.bin
+		}
+
+		menuentry "Boot from the first hard disk" {
+		set root=(hd0)
+		chainloader +1
+		}
+		EOF
 )
 
-INITRAMFS=initramfs
-rm -rf $INITRAMFS
-mkdir $INITRAMFS
-(
-cd $INITRAMFS
-
-mkdir cdrom
-mkdir dev
-mkdir mnt
-mkdir proc
-mkdir rootfs
-mkdir sys
-
-cat << EOF > init
-#!/bin/sh
-mount none -t devtmpfs /dev
-mount none -t proc /proc
-mount none -t sysfs /sys
-modprobe iso9660
-mount /dev/sr0 /cdrom
-mount /cdrom/filesystem.squashfs /rootfs
-exec switch_root /rootfs /sbin/init
-EOF
-chmod +x init
-
-find . | cpio -v --create --format='newc' | gzip >> $CDROOT/boot/initrd.img
-)
-
-cat << EOF > $CDROOT/boot/grub/grub.cfg
-set default="0"
-set timeout=20
-
-menuentry "Ubuntu CLI" {
-linux /boot/vmlinuz vga=791 textonly
-initrd /boot/initrd.img
-}
-
-menuentry "Memory Test" {
-linux16 /boot/memtest86+.bin
-}
-
-menuentry "Boot from the first hard disk" {
-set root=(hd0)
-chainloader +1
-}
-EOF
-
-mksquashfs $ROOT $CDROOT/filesystem.squashfs
-
-grub-mkrescue -o busy-cd.iso $CDROOT
+grub-mkrescue -o busy-cd.iso busycd
+#rm -rf busycd
 
