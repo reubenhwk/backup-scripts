@@ -43,7 +43,7 @@ Now that you have a device partitioned, filesystems created, and a backup.fstab,
 you're ready to make the clone.  Just invoke lrc clone and pass the backup.fstab
 on the command line as the first argument.  This will bind mount all the filesystems
 in /etc/fstab somewhere in /tmp, then mount all the filesystems in your backup.fstab
-somewhere in /tmp, then rsync the roots making a complete close.  The boot loader
+somewhere in /tmp, then rsync the roots making a complete clone.  The boot loader
 will also be installed on the destination device specified in backup.fstab.
 
  $ sudo lrc clone backup.fstab
