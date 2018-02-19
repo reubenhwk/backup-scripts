@@ -12,8 +12,8 @@ if ! test -f "$1" ; then
 fi
 
 die () {
-	echo "error: $@, exiting"
-	exit 1
+    echo "error: $@, exiting"
+    exit 1
 }
 
 exec 200>/var/lock/.lrc-clone.lock
@@ -27,24 +27,24 @@ BOOTDEV=$(cat $BACKUP_FSTAB | sed 's/[ \t]\+$//g' | grep 'boot-loader$' | sed 's
 MOUNTS=
 
 run-cmd () {
-	echo "$1"
-	eval "$1"
+    echo "$1"
+    eval "$1"
 }
 
 second-guess () {
-	echo -n "Use $BOOTDEV? (y/n) [n]: "
-	read yesno
-	if [ "$yesno" != "y" ] ; then
-		exit
-	fi
+    echo -n "Use $BOOTDEV? (y/n) [n]: "
+    read yesno
+    if [ "$yesno" != "y" ] ; then
+        exit
+    fi
 }
 
 trim-comments () {
-	sed 's/#.*$//g' | sed 's/[ \t]*$//g' | grep -v "^$"
+    sed 's/#.*$//g' | sed 's/[ \t]*$//g' | grep -v "^$"
 }
 
 trimfile () {
-	cat $1 | trim-comments | awk '{printf "%s %s %s\n", $1, $2, $3}'
+    cat $1 | trim-comments | awk '{printf "%s %s %s\n", $1, $2, $3}'
 }
 
 mount-target-fs () {
@@ -53,52 +53,52 @@ mount-target-fs () {
     # the filesystems in it.  This is where the destination
     # filesystem is mounted.
 
-	while read dev mnt rest ; do
-		if [ "$mnt" != "boot-loader" ] ; then
-			mkdir -p $DST${mnt}
-			run-cmd "mount $dev $DST${mnt}"
-		fi
-	done < <(trimfile $BACKUP_FSTAB | csort -k2)
+    while read dev mnt rest ; do
+        if [ "$mnt" != "boot-loader" ] ; then
+            mkdir -p $DST${mnt}
+            run-cmd "mount $dev $DST${mnt}"
+        fi
+    done < <(trimfile $BACKUP_FSTAB | csort -k2)
 }
 
 clone-fs () {
 
-	# remount everything in /etc/fstab on a temporary mount point.  This
+    # remount everything in /etc/fstab on a temporary mount point.  This
     # way we don't end up trying to backup /proc, /sys, /tmp and other
     # mount points we don't care about.  We only want to backup the
     # filesystems on /etc/fstab.
-	while read dev mnt fs rest ; do
-		if [ "$dev" != "none" ] ; then
-		    run-cmd "mount --bind $mnt $SRC${mnt}"
-		fi
-	done < <(trimfile /etc/fstab | csort -k2)
+    while read dev mnt fs rest ; do
+        if [[ "$dev" != "none" && "$mnt" != "none" ]] ; then
+            run-cmd "mount --bind $mnt $SRC${mnt}"
+        fi
+    done < <(trimfile /etc/fstab | csort -k2)
 
-	# rsync the temporary mount point SRC to the destination DST
-	echo "cloning $SRC to $DST"
-	rsync -aEHSv --delete \
+    # rsync the temporary mount point SRC to the destination DST
+    echo "cloning $SRC to $DST"
+    rsync -aEHSv --delete \
         --exclude var/run \
         --exclude var/tmp \
         --exclude tmp \
-		$SRC/* \
-		$DST/. || die "rsync failed"
+        $SRC/* \
+        $DST/. || die "rsync failed"
 
     # These were excluded from the rsync.  Make sure they exist
     # in the destination filesystem.
-	mkdir -p $DST/var/run
-	mkdir -p $DST/var/tmp
-	mkdir -p $DST/tmp
+    mkdir -p $DST/var/run
+    mkdir -p $DST/var/tmp
+    mkdir -p $DST/tmp
 }
 
 rewrite-grub () {
-	echo "installing GRUB2 on $BOOTDEV"
+    echo "installing GRUB2 on $BOOTDEV"
 
     # These are used by many tools these days and will need to be
     # mounted for chrooting to the destination filesystem.  We chroot
     # and do some final setup, such as the boot loader.
-	for d in dev proc run sys ; do
-		mkdir -p $DST/$d
-		mount --bind /$d $DST/$d || die "failed to mount --bind /$d $DST/$d"
-	done
+    for d in dev proc run sys ; do
+        mkdir -p $DST/$d
+        mount --bind /$d $DST/$d || die "failed to mount --bind /$d $DST/$d"
+    done
 
 # Write an updated grub config
 cat << EOF > $DST/etc/default/grub
@@ -119,22 +119,22 @@ grub-install $BOOTDEV
 grub-mkconfig -o /boot/grub/grub.cfg
 EOF
 
-	chmod +x $DST/tmp/grub.sh
-	(
-		chroot $DST /tmp/grub.sh
-	)
-	rm $DST/tmp/grub.sh
+    chmod +x $DST/tmp/grub.sh
+    (
+        chroot $DST /tmp/grub.sh
+    )
+    rm $DST/tmp/grub.sh
 }
 
 rewrite-fstab () {
 
-	# This function basically reads the spec file
-	# and converts it to /etc/fstab in the destination
-	# filesystem
+    # This function basically reads the spec file
+    # and converts it to /etc/fstab in the destination
+    # filesystem
 
-	echo "writing new $DST/etc/fstab..."
+    echo "writing new $DST/etc/fstab..."
 
-	mkdir -p $DST/etc
+    mkdir -p $DST/etc
 
 # Write the fstab header
 cat << EOF > $DST/etc/fstab
@@ -149,42 +149,42 @@ EOF
 
     # Read the backup fstab as input, write out the UUID's to the
     # updated /etc/fstab on the destination filesystem.
-	while read dev mnt fs rest ; do
-		if [ "$mnt" != "boot-loader" ] ; then
-			local UUID=$(blkid $dev| cut -d\" -f2)
-			if [ "$mnt" = "/" ] ; then
-				pass=1
-			else
-				pass=0
-			fi
+    while read dev mnt fs rest ; do
+        if [ "$mnt" != "boot-loader" ] ; then
+            local UUID=$(blkid $dev| cut -d\" -f2)
+            if [ "$mnt" = "/" ] ; then
+                pass=1
+            else
+                pass=0
+            fi
 
-			fs=${fs:=auto}
+            fs=${fs:=auto}
 
-			echo "UUID=$UUID $mnt $fs defaults 0 $pass" >> $DST/etc/fstab
-		fi
-	done < <(trimfile $BACKUP_FSTAB | csort -k2)
+            echo "UUID=$UUID $mnt $fs defaults 0 $pass" >> $DST/etc/fstab
+        fi
+    done < <(trimfile $BACKUP_FSTAB | csort -k2)
 
-	echo "none /tmp tmpfs defaults 0 0" >> $DST/etc/fstab
+    echo "none /tmp tmpfs defaults 0 0" >> $DST/etc/fstab
 
     # Show the result
-	cat $DST/etc/fstab
+    cat $DST/etc/fstab
 }
 
 tag-clone () {
-	# Find the UUID of the root filesystem and append it,
-	# along with the date, to the end of /etc/tag.txt on
-	# the destination filesystem.  This gives a kind of
+    # Find the UUID of the root filesystem and append it,
+    # along with the date, to the end of /etc/tag.txt on
+    # the destination filesystem.  This gives a kind of
     # lineage of the backup.
-	srcuuid=unknown
-	while read dev mnt rest ; do
-		if [ "$mnt" == "/" ] ; then
-			srcuuid=$(blkid -s UUID -o value $dev)
-			break
-		fi
-	done < <(cat /proc/mounts)
+    srcuuid=unknown
+    while read dev mnt rest ; do
+        if [ "$mnt" == "/" ] ; then
+            srcuuid=$(blkid -s UUID -o value $dev)
+            break
+        fi
+    done < <(cat /proc/mounts)
 
-	mkdir -p $DST/etc/lrc-clone
-	echo "$srcuuid $(date)" >> $DST/etc/lrc-clone/tag.txt
+    mkdir -p $DST/etc/lrc-clone
+    echo "$srcuuid $(date)" >> $DST/etc/lrc-clone/tag.txt
 }
 
 unmount_all () {
@@ -193,7 +193,7 @@ unmount_all () {
     # When nothing in /proc/mounts belongs to this
     # backup, then everything is fully unmounted and the
     # mount points can safely be removed.
-	sync
+    sync
     local count=1
     while (( $count > 0 )) ; do
         count=0
@@ -211,26 +211,26 @@ unmount_all () {
 
 cleanup () {
     unmount_all
-	test -d $SRC && rmdir $SRC
-	test -d $DST && rmdir $DST
-	test -d $TMP && rmdir $TMP
+    test -d $SRC && rmdir $SRC
+    test -d $DST && rmdir $DST
+    test -d $TMP && rmdir $TMP
 }
 
 main () {
-	second-guess
+    second-guess
 
     TMP=$(mktemp -d ${TMP:=/tmp}/backup.XXXXX)
-	trap "cleanup ; exit" INT TERM EXIT
+    trap "cleanup ; exit" INT TERM EXIT
     echo "tmp is $TMP"
     mkdir -p $TMP/{src,dst}
     DST=$TMP/dst
     SRC=$TMP/src
-	mount-target-fs
+    mount-target-fs
 
-	clone-fs
-	rewrite-fstab
-	rewrite-grub
-	tag-clone
+    clone-fs
+    rewrite-fstab
+    rewrite-grub
+    tag-clone
 }
 
 main
