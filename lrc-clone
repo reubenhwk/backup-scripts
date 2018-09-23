@@ -32,7 +32,16 @@ run-cmd () {
 }
 
 second-guess () {
-    echo -n "Use $BOOTDEV? (y/n) [n]: "
+    while read dev mnt rest ; do
+        if [ "$mnt" != "boot-loader" ] ; then
+            echo "$dev $mnt"
+        fi
+    done < <(trimfile $BACKUP_FSTAB | csort -k2)
+
+    echo "install GRUB on $BOOTDEV"
+    echo
+    echo -n "Use this filesystem layout for clone? (y/n) [n]: "
+
     read yesno
     if [ "$yesno" != "y" ] ; then
         exit
