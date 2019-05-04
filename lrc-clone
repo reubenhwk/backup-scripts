@@ -85,6 +85,7 @@ clone-fs () {
     # rsync the temporary mount point SRC to the destination DST
     echo "cloning $SRC to $DST"
     rsync -aEHSv --delete \
+        --exclude media \
         --exclude var/run \
         --exclude var/tmp \
         --exclude tmp \
