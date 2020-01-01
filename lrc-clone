@@ -2,10 +2,16 @@
 
 # vim: ts=4 et sw=4
 
+if test -d /sys/firmware/efi ; then
+    echo "This system is EFI and EFI is not supported." >&2
+    exit 1
+fi
+
 if test -z "$1" ; then
     echo "usage: $0 backup.fstab" >&2
     exit 1
 fi
+
 if ! test -f "$1" ; then
     echo "ERROR!!! no such file: $1" >&2
     exit 1
