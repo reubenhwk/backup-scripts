@@ -3,12 +3,9 @@
 
 CFLAGS = -std=gnu99 -D_GNU_SOURCE
 
-TARGETS = csort disk-id
+TARGETS = csort
 
 all: $(TARGETS)
-
-disk-id: disk-id.c
-	$(CC) -o $@ $^
 
 csort: csort.o
 	$(CC) -o $@ $^
