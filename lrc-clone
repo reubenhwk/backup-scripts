@@ -2,10 +2,10 @@
 
 # vim: ts=4 et sw=4
 
-if test -d /sys/firmware/efi ; then
-    echo "This system is EFI and EFI is not supported." >&2
-    exit 1
-fi
+#if test -d /sys/firmware/efi ; then
+#    echo "This system is EFI and EFI is not supported." >&2
+#    exit 1
+#fi
 
 if test -z "$1" ; then
     echo "usage: $0 backup.fstab" >&2
@@ -91,18 +91,31 @@ clone-fs () {
     # rsync the temporary mount point SRC to the destination DST
     echo "cloning $SRC to $DST"
     rsync -aEHSv --delete \
+        --exclude boot/efi \
+        --exclude dev \
+        --exclude home/*/.cache \
+        --exclude home/*/.debug \
         --exclude media \
-        --exclude var/run \
-        --exclude var/tmp \
+        --exclude run \
         --exclude tmp \
+        --exclude var/crash \
+        --exclude var/cache \
+        --exclude var/tmp \
+        --exclude var/log/journal \
         $SRC/* \
         $DST/. || die "rsync failed"
 
     # These were excluded from the rsync.  Make sure they exist
     # in the destination filesystem.
-    mkdir -p $DST/var/run
-    mkdir -p $DST/var/tmp
+    mkdir -p $DST/boot/efi
+    mkdir -p $DST/media
+    mkdir -p $DST/run
     mkdir -p $DST/tmp
+    mkdir -p $DST/var/cache
+    mkdir -p $DST/var/crash
+    mkdir -p $DST/var/log/journal
+    mkdir -p $DST/var/tmp
+    ln -s /run $DST/var/run
 }
 
 rewrite-grub () {
@@ -111,28 +124,29 @@ rewrite-grub () {
     # These are used by many tools these days and will need to be
     # mounted for chrooting to the destination filesystem.  We chroot
     # and do some final setup, such as the boot loader.
-    for d in dev proc run sys ; do
+    for d in dev proc run sys sys/firmware/efi/efivars ; do
         mkdir -p $DST/$d
-        mount --bind /$d $DST/$d || die "failed to mount --bind /$d $DST/$d"
+        run-cmd "mount --bind /$d $DST/$d" || die "failed to mount --bind /$d $DST/$d"
     done
 
 # Write an updated grub config
 cat << EOF > $DST/etc/default/grub
 GRUB_DEFAULT=0
 GRUB_TIMEOUT=20
-GRUB_DISTRIBUTOR="Backup/Clone - $(date)"
-#GRUB_CMDLINE_LINUX_DEFAULT="quiet splash"
+GRUB_TIMEOUT_STYLE=menu
+#GRUB_DISTRIBUTOR=`lsb_release -i -s 2> /dev/null || echo Debian`
+GRUB_DISTRIBUTOR="Ubuntu"
+GRUB_CMDLINE_LINUX_DEFAULT=""
 GRUB_CMDLINE_LINUX=""
+GRUB_DISABLE_OS_PROBER=true
 EOF
 
 # Write a script which we'll run in the chrooted destination
 # filesystem.  This will setup grub.
 cat << EOF > $DST/tmp/grub.sh
 #!/usr/bin/env bash
-sed -i 's/GRUB_TIMEOUT=.*$/GRUB_TIMEOUT=30/g' /etc/default/grub
-echo GRUB_DISABLE_OS_PROBER=true >> /etc/default/grub
 grub-install $BOOTDEV
-grub-mkconfig -o /boot/grub/grub.cfg
+update-grub
 EOF
 
     chmod +x $DST/tmp/grub.sh
@@ -167,7 +181,7 @@ EOF
     # updated /etc/fstab on the destination filesystem.
     while read dev mnt fs rest ; do
         if [ "$mnt" != "boot-loader" ] ; then
-            local UUID=$(blkid $dev| cut -d\" -f2)
+            local UUID=$(blkid $dev | grep -o " UUID=\"[a-zA-Z0-9\-]*\"" | cut -c 7- | tr -d '"')
             if [ "$mnt" = "/" ] ; then
                 pass=1
             else
@@ -181,6 +195,7 @@ EOF
     done < <(trimfile $BACKUP_FSTAB | csort -k2)
 
     echo "none /tmp tmpfs defaults 0 0" >> $DST/etc/fstab
+    echo "none /run tmpfs defaults 0 0" >> $DST/etc/fstab
 
     # Show the result
     cat $DST/etc/fstab
