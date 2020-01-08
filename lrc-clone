@@ -151,7 +151,6 @@ cat << EOF > $DST/tmp/grub.sh
 #!/usr/bin/env bash
 grub-install $BOOTDEV
 update-grub
-bash
 EOF
 
     chmod +x $DST/tmp/grub.sh
