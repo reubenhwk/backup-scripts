@@ -97,17 +97,19 @@ clone-fs () {
         --exclude home/*/.debug \
         --exclude media \
         --exclude run \
+        --exclude swapfile \
         --exclude tmp \
-        --exclude var/crash \
         --exclude var/cache \
-        --exclude var/tmp \
+        --exclude var/crash \
         --exclude var/log/journal \
+        --exclude var/tmp \
         $SRC/* \
         $DST/. || die "rsync failed"
 
     # These were excluded from the rsync.  Make sure they exist
     # in the destination filesystem.
     mkdir -p $DST/boot/efi
+    mkdir -p $DST/dev
     mkdir -p $DST/media
     mkdir -p $DST/run
     mkdir -p $DST/tmp
@@ -115,7 +117,7 @@ clone-fs () {
     mkdir -p $DST/var/crash
     mkdir -p $DST/var/log/journal
     mkdir -p $DST/var/tmp
-    ln -s /run $DST/var/run
+    [ ! -L $DST/var/run ] && ln -sf /run $DST/var/run
 }
 
 rewrite-grub () {
@@ -125,8 +127,10 @@ rewrite-grub () {
     # mounted for chrooting to the destination filesystem.  We chroot
     # and do some final setup, such as the boot loader.
     for d in dev proc run sys sys/firmware/efi/efivars ; do
-        mkdir -p $DST/$d
-        run-cmd "mount --bind /$d $DST/$d" || die "failed to mount --bind /$d $DST/$d"
+        if [ -d /$d ] ; then
+            mkdir -p $DST/$d
+            run-cmd "mount --bind /$d $DST/$d" || die "failed to mount --bind /$d $DST/$d"
+        fi
     done
 
 # Write an updated grub config
@@ -147,6 +151,7 @@ cat << EOF > $DST/tmp/grub.sh
 #!/usr/bin/env bash
 grub-install $BOOTDEV
 update-grub
+bash
 EOF
 
     chmod +x $DST/tmp/grub.sh
