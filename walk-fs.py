@@ -14,8 +14,19 @@ def xprint(fd, key=None, value=None):
     else:
         os.write(fd, "\n".encode('utf-8'))
 
+def hash_file(name):
+    xhash = hashfunc()
+    with open(name, 'rb') as f:
+        data = f.read(64*1024)
+        while len(data) > 0:
+            xhash.update(data)
+            data = f.read(64*1024)
+    return xhash.hexdigest(), xhash.name
+
 def directory_handler(path):
     global total_size
+    fd, tmpfile_name = tempfile.mkstemp(dir=".backup")
+
     for dirent in os.listdir(path):
         fullpath = "{}/{}".format(path, dirent)
         if os.path.isdir(fullpath):
@@ -23,8 +34,6 @@ def directory_handler(path):
                 continue
             directory_handler(fullpath)
         stat = os.lstat(fullpath)
-
-        fd, name = tempfile.mkstemp(dir=".backup")
 
         xprint(fd, "name", dirent)
         xprint(fd, "mtime_ns", stat.st_mtime_ns)
@@ -34,18 +43,15 @@ def directory_handler(path):
         xprint(fd, "size", stat.st_size)
 
         if os.path.isfile(fullpath):
-            xhash = hashfunc()
-            with open(fullpath, 'rb') as f:
-                data = f.read(64*1024)
-                while len(data) > 0:
-                    xhash.update(data)
-                    data = f.read(64*1024)
-            digest = xhash.hexdigest()
-            xprint(fd, xhash.name, digest)
+            digest, hash_name = hash_file(fullpath)
+            xprint(fd, hash_name, digest)
         xprint(fd)
-        os.close(fd)
         total_size += stat.st_size
+    os.close(fd)
+    digest, hash_name = hash_file(tmpfile_name)
+    os.rename(tmpfile_name, ".backup/{}".format(digest))
+    return digest
 
 os.makedirs(".backup", exist_ok=True)
-directory_handler(".")
+print(".", directory_handler("."))
 print("total_size", total_size)
