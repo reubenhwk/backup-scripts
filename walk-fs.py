@@ -4,6 +4,7 @@ import os
 import hashlib
 import tempfile
 import json
+import time
 
 hashfunc = hashlib.sha224
 
@@ -52,14 +53,39 @@ def directory_handler(path):
 
         total_size += stat.st_size
 
-    fd, tmpfile_name = tempfile.mkstemp(dir=".backup")
+    fd, tmpfile_name = tempfile.mkstemp(dir=".backup/tmp")
     xprint(fd, {"inodes" : inodes})
     os.close(fd)
 
     digest, hash_name = hash_file(tmpfile_name)
-    os.rename(tmpfile_name, ".backup/{}".format(digest))
+    os.rename(tmpfile_name, ".backup/blobs/{}".format(digest))
     return digest, hash_name
 
-os.makedirs(".backup", exist_ok=True)
-print(".", directory_handler(".")[0])
+os.makedirs(".backup/blobs", exist_ok=True)
+os.makedirs(".backup/tmp", exist_ok=True)
+
+# Make a head pointer stored in .backup/head (which is actually a symlink)
+root_blob, hash_name = directory_handler(".")
+fd, tmpfile_name = tempfile.mkstemp(dir=".backup/tmp")
+head = dict()
+head['date'] = time.time()
+head['root'] = {hash_name : root_blob}
+xprint(fd, head)
+os.close(fd)
+digest, hash_name = hash_file(tmpfile_name)
+head_filename = ".backup/blobs/{}".format(digest)
+os.rename(tmpfile_name, head_filename)
+try:
+    os.remove(".backup/head.prev")
+except:
+    pass
+try:
+    os.rename(".backup/head", ".backup/head.prev")
+except:
+    pass
+os.symlink("blobs/{}".format(digest), ".backup/head")
+
+print("head", ".backup/head")
 print("total_size", total_size)
+
+
