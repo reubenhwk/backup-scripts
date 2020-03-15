@@ -28,7 +28,7 @@ def file_handler(path):
 
 def directory_handler(path):
     global total_size
-    inodes = list()
+    inodes = dict()
     for dirent in os.listdir(path):
         inode = dict()
         fullpath = "{}/{}".format(path, dirent)
@@ -43,13 +43,12 @@ def directory_handler(path):
 
         stat = os.lstat(fullpath)
 
-        inode["name"] =  dirent
         inode["mtime_ns"] = stat.st_mtime_ns
         inode["mode"] = stat.st_mode
         inode["uid"] = stat.st_uid
         inode["gid"] = stat.st_gid
         inode["size"] = stat.st_size
-        inodes.append(inode)
+        inodes[dirent] = inode
 
         total_size += stat.st_size
 
