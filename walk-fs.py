@@ -64,14 +64,14 @@ def directory_handler(path, prev_root):
         elif os.path.isfile(fullpath):
             if prev_inode:
                 if prev_inode["mtime_ns"] == stat.st_mtime_ns:
-                    print("skipping {}".format(fullpath))
+                    #print("skipping {}".format(fullpath))
                     inode = prev_inode
                 else:
-                    print("mtime_ns check fail {}".format(fullpath))
+                    #print("mtime_ns check fail {}".format(fullpath))
                     digest, hash_name = file_handler(fullpath)
                     inode[hash_name] = digest
             else:
-                print("prev_inode check fail {}".format(fullpath))
+                #print("prev_inode check fail {}".format(fullpath))
                 digest, hash_name = file_handler(fullpath)
                 inode[hash_name] = digest
 
@@ -84,7 +84,13 @@ def directory_handler(path, prev_root):
     os.close(fd)
 
     digest, hash_name = hash_file(tmpfile_name)
-    os.rename(tmpfile_name, ".backup/blobs/{}".format(digest))
+    target = ".backup/blobs/{}".format(digest)
+    if os.path.exists(target):
+        os.remove(tmpfile_name)
+        #print("{} already exists for {}".format(target, path))
+    else:
+        os.rename(tmpfile_name, ".backup/blobs/{}".format(digest))
+        #print("{} created for {}".format(target, path))
     return digest, hash_name
 
 def make_backup(prev_root=None):
