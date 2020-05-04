@@ -15,6 +15,15 @@ os.makedirs(".backup/tmp", exist_ok=True)
 def xprint(fd, inodes):
     os.write(fd, json.dumps(inodes, indent=4, sort_keys=True).encode('utf-8'))
 
+def root_to_filename(root):
+    h = root[hashfunc().name]
+    return ".backup/blobs/{}".format(h)
+
+def load_root(root):
+    if root:
+        return json.load(open(root_to_filename(root), 'r'))
+    return {}
+
 def hash_file(name):
     xhash = hashfunc()
     with open(name, 'rb') as f:
@@ -28,28 +37,44 @@ def file_handler(path):
     digest, hash_name = hash_file(path)
     return digest, hash_name
 
-def directory_handler(path):
+def directory_handler(path, prev_root):
     global total_size
     inodes = dict()
     for dirent in os.listdir(path):
-        inode = dict()
         fullpath = "{}/{}".format(path, dirent)
         if os.path.isdir(fullpath):
             if dirent == ".backup":
                 continue
-            digest, hash_name = directory_handler(fullpath)
-            inode[hash_name] = digest
-        elif os.path.isfile(fullpath):
-            digest, hash_name = file_handler(fullpath)
-            inode[hash_name] = digest
-
         stat = os.lstat(fullpath)
-
+        inode = dict()
         inode["mtime_ns"] = stat.st_mtime_ns
         inode["mode"] = stat.st_mode
         inode["uid"] = stat.st_uid
         inode["gid"] = stat.st_gid
         inode["size"] = stat.st_size
+        prev_inode = None
+        if prev_root and 'inodes' in prev_root and dirent in prev_root['inodes']:
+            prev_inode = prev_root['inodes'][dirent]
+        if os.path.isdir(fullpath):
+            pr = None
+            if prev_root and 'inodes' in prev_root and dirent in prev_root['inodes']:
+                pr = prev_root['inodes'][dirent]
+            digest, hash_name = directory_handler(fullpath, load_root(pr))
+            inode[hash_name] = digest
+        elif os.path.isfile(fullpath):
+            if prev_inode:
+                if prev_inode["mtime_ns"] == stat.st_mtime_ns:
+                    print("skipping {}".format(fullpath))
+                    inode = prev_inode
+                else:
+                    print("mtime_ns check fail {}".format(fullpath))
+                    digest, hash_name = file_handler(fullpath)
+                    inode[hash_name] = digest
+            else:
+                print("prev_inode check fail {}".format(fullpath))
+                digest, hash_name = file_handler(fullpath)
+                inode[hash_name] = digest
+
         inodes[dirent] = inode
 
         total_size += stat.st_size
@@ -62,9 +87,9 @@ def directory_handler(path):
     os.rename(tmpfile_name, ".backup/blobs/{}".format(digest))
     return digest, hash_name
 
-def make_backup():
+def make_backup(prev_root=None):
     # Make a head pointer stored in .backup/head (which is actually a symlink)
-    root_blob, hash_name = directory_handler(".")
+    root_blob, hash_name = directory_handler(".", load_root(prev_root))
     fd, tmpfile_name = tempfile.mkstemp(dir=".backup/tmp")
     head = dict()
     head['date'] = time.time()
@@ -85,7 +110,16 @@ def make_backup():
     os.symlink("blobs/{}".format(digest), ".backup/head")
 
 if __name__ == "__main__":
-    make_backup()
+    fp = None
+    try:
+        fp = open(".backup/head", "r")
+    except FileNotFoundError:
+        pass
+    if fp:
+        prev_backup = json.load(fp)
+        make_backup(prev_backup['root'])
+    else:
+        make_backup()
     print("head", ".backup/head")
     print("total_size", total_size)
 
