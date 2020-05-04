@@ -15,9 +15,16 @@ os.makedirs(".backup/tmp", exist_ok=True)
 def xprint(fd, inodes):
     os.write(fd, json.dumps(inodes, indent=4, sort_keys=True).encode('utf-8'))
 
+def hash_to_filename(h):
+    p1 = h[:3]
+    p2 = h[3:][:3]
+    p3 = h[6:]
+    os.makedirs(".backup/blobs/{}/{}".format(p1, p2), exist_ok=True)
+    return ".backup/blobs/{}/{}/{}".format(p1, p2, p3)
+
 def root_to_filename(root):
     h = root[hashfunc().name]
-    return ".backup/blobs/{}".format(h)
+    return hash_to_filename(h)
 
 def load_root(root):
     if root:
@@ -84,12 +91,12 @@ def directory_handler(path, prev_root):
     os.close(fd)
 
     digest, hash_name = hash_file(tmpfile_name)
-    target = ".backup/blobs/{}".format(digest)
+    target = hash_to_filename(digest)
     if os.path.exists(target):
         os.remove(tmpfile_name)
         #print("{} already exists for {}".format(target, path))
     else:
-        os.rename(tmpfile_name, ".backup/blobs/{}".format(digest))
+        os.rename(tmpfile_name, target)
         #print("{} created for {}".format(target, path))
     return digest, hash_name
 
@@ -103,7 +110,7 @@ def make_backup(prev_root=None):
     xprint(fd, head)
     os.close(fd)
     digest, hash_name = hash_file(tmpfile_name)
-    head_filename = ".backup/blobs/{}".format(digest)
+    head_filename = hash_to_filename(digest)
     os.rename(tmpfile_name, head_filename)
     try:
         os.remove(".backup/head.prev")
@@ -113,7 +120,7 @@ def make_backup(prev_root=None):
         os.rename(".backup/head", ".backup/head.prev")
     except:
         pass
-    os.symlink("blobs/{}".format(digest), ".backup/head")
+    os.symlink(hash_to_filename(digest).replace(".backup/", ""), ".backup/head")
 
 if __name__ == "__main__":
     fp = None
