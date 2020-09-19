@@ -1,7 +1,6 @@
 
 This software makes a bootable clone of your system to another storage device,
-or set of storage devices.  Currently, only BIOS is supported.  There is no
-GPT/EFI support.
+or set of storage devices.
 
 To make this bootable clone, follow these steps...
 
