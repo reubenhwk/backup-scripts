@@ -78,7 +78,7 @@ clone-fs () {
     # mount points we don't care about.  We only want to backup the
     # filesystems on /etc/fstab.
     while read dev mnt fs rest ; do
-        if [[ "$dev" != "none" && "$mnt" != "none" ]] ; then
+        if [[ "$dev" != "none" && "$mnt" != "none" && "$fs" != "nfs" ]] ; then
             run-cmd "mount --bind $mnt $SRC${mnt}"
         fi
     done < <(trimfile /etc/fstab | csort -k2)
